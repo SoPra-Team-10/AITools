@@ -148,6 +148,33 @@ namespace aiTools{
         return std::nullopt;
     }
 
+    auto getTeamFormation(gameModel::TeamSide side) -> communication::messages::request::TeamFormation {
+        using P = gameModel::Position;
+        P seekerPos{3, 8};
+        P keeperPos{3, 6};
+        P c1Pos{7, 4};
+        P c2Pos{6, 6};
+        P c3Pos{7, 8};
+        P b1Pos{6, 5};
+        P b2Pos{6, 7};
+        if(side == gameModel::TeamSide::RIGHT){
+            mirrorPos(seekerPos);
+            mirrorPos(keeperPos);
+            mirrorPos(c1Pos);
+            mirrorPos(c2Pos);
+            mirrorPos(c3Pos);
+            mirrorPos(b1Pos);
+            mirrorPos(b2Pos);
+        }
+
+        return {seekerPos.x, seekerPos.y, keeperPos.x, keeperPos.y, c1Pos.x, c1Pos.y, c2Pos.x, c2Pos.y,
+                c3Pos.x, c3Pos.y, b1Pos.x, b1Pos.y, b2Pos.x, b2Pos.y};
+    }
+
+    void mirrorPos(gameModel::Position &pos) {
+        pos.x = FIELD_WIDTH - pos.x;
+    }
+
     auto State::getFeatureVec(gameModel::TeamSide side) const -> std::array<double, 122> {
                 std::array<double, FEATURE_VEC_LEN> ret = {};
         auto insertTeam = [this](gameModel::TeamSide side, std::array<double, 120>::iterator &it){

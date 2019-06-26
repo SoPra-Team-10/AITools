@@ -20,6 +20,7 @@
 
 namespace aiTools{
     constexpr auto minShotSuccessProb = 0.2;
+    static constexpr int FIELD_WIDTH = 16;
 
     class State {
     public:
@@ -365,6 +366,19 @@ namespace aiTools{
     * @return returns an EntityID from the Target, which be attacked by the Range-Attack
     */
     auto getGoblinTarget(const gameModel::TeamSide &mySide, const State &state) -> const std::optional<communication::messages::types::EntityId>;
+
+    /**
+     * Returns the AI s initial formation
+     * @param side the side on which the AI plays
+     * @return
+     */
+    auto getTeamFormation(gameModel::TeamSide side) -> communication::messages::request::TeamFormation;
+
+    /**
+     * Mirrors the given position in place on the x-axis
+     * @param pos
+     */
+    void mirrorPos(gameModel::Position &pos);
 }
 
 #endif //KI_AITOOLS_H
