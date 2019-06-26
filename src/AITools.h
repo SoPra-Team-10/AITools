@@ -379,6 +379,8 @@ namespace aiTools{
      * @param pos
      */
     void mirrorPos(gameModel::Position &pos);
+
+    int maybeMirrorX(const int &x, bool necessary);
 }
 
 #endif //KI_AITOOLS_H
