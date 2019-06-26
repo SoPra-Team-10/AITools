@@ -26,15 +26,15 @@ namespace aiTools{
     public:
         static constexpr auto FEATURE_VEC_LEN = 122;
         std::shared_ptr<gameModel::Environment> env;
-        unsigned int roundNumber;
-        communication::messages::types::PhaseType currentPhase;
-        gameController::ExcessLength  overtimeState;
-        unsigned int overTimeCounter;
-        bool goalScoredThisRound;
-        std::unordered_set<communication::messages::types::EntityId> playersUsedLeft;
-        std::unordered_set<communication::messages::types::EntityId> playersUsedRight;
-        std::array<unsigned int, 5> availableFansLeft; //Teleport, RangedAttack, Impulse, SnitchPush, BlockCell
-        std::array<unsigned int, 5> availableFansRight;
+        unsigned int roundNumber = 1;
+        communication::messages::types::PhaseType currentPhase = communication::messages::types::PhaseType::BALL_PHASE;
+        gameController::ExcessLength overtimeState = gameController::ExcessLength::None;
+        unsigned int overTimeCounter = 0;
+        bool goalScoredThisRound = false;
+        std::unordered_set<communication::messages::types::EntityId> playersUsedLeft = {};
+        std::unordered_set<communication::messages::types::EntityId> playersUsedRight ={};
+        std::array<unsigned int, 5> availableFansLeft = {}; //Teleport, RangedAttack, Impulse, SnitchPush, BlockCell
+        std::array<unsigned int, 5> availableFansRight = {};
 
         /**
          * Computes a feature vecor from its members
