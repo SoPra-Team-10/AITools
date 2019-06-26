@@ -147,4 +147,65 @@ namespace aiTools{
 
         return std::nullopt;
     }
+
+    auto State::getFeatureVec(gameModel::TeamSide side) const -> std::array<double, 122> {
+                std::array<double, FEATURE_VEC_LEN> ret = {};
+        auto insertTeam = [this](gameModel::TeamSide side, std::array<double, 120>::iterator &it){
+            auto &usedPlayers = side == gameModel::TeamSide::LEFT ? playersUsedLeft : playersUsedRight;
+            auto &availableFans = side == gameModel::TeamSide::LEFT ? availableFansLeft : availableFansRight;
+            for(const auto &player : env->getTeam(side)->getAllPlayers()){
+                *it++ = player->position.x;
+                *it++ = player->position.y;
+                bool used = false;
+                for(const auto &id : usedPlayers){
+                    if(player->id == id){
+                        used = true;
+                        break;
+                    }
+                }
+
+                *it++ = used;
+                *it++ = !used && !player->knockedOut && !player->isFined;
+                *it++ = player->knockedOut;
+                *it++ = player->isFined;
+            }
+
+            for(const auto &useNumber : availableFans){
+                *it++ = useNumber;
+            }
+        };
+
+        auto opponentSide = side == gameModel::TeamSide::LEFT ? gameModel::TeamSide::RIGHT : gameModel::TeamSide::LEFT;
+        ret[0] = roundNumber;
+        ret[1] = static_cast<double>(currentPhase);
+        ret[2] = static_cast<double>(overtimeState);
+        ret[3] = overTimeCounter;
+        ret[4] = goalScoredThisRound;
+        ret[5] = env->getTeam(side)->score;
+        ret[6] = env->getTeam(opponentSide)->score;
+        auto it = ret.begin() + 7;
+        for(const auto &shit : env->pileOfShit){
+            *it++ = shit->position.x;
+            *it++ = shit->position.y;
+        }
+
+        for(unsigned long i = 0; i < 12 - env->pileOfShit.size(); i++){
+            *it++ = 0;
+            *it++ = 0;
+        }
+
+        ret[19] = env->quaffle->position.x;
+        ret[20] = env->quaffle->position.y;
+        ret[21] = env->bludgers[0]->position.x;
+        ret[22] = env->bludgers[0]->position.y;
+        ret[23] = env->bludgers[1]->position.x;
+        ret[24] = env->bludgers[1]->position.y;
+        ret[25] = env->snitch->position.x;
+        ret[26] = env->snitch->position.y;
+        ret[27] = env->snitch->exists;
+        it = ret.begin() + 28;
+        insertTeam(side, it);
+        insertTeam(opponentSide, it);
+        return ret;
+    }
 }

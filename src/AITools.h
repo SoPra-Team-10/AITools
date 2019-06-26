@@ -21,7 +21,9 @@
 namespace aiTools{
     constexpr auto minShotSuccessProb = 0.2;
 
-    struct State{
+    class State {
+    public:
+        static constexpr auto FEATURE_VEC_LEN = 122;
         std::shared_ptr<gameModel::Environment> env;
         unsigned int roundNumber;
         communication::messages::types::PhaseType currentPhase;
@@ -32,6 +34,13 @@ namespace aiTools{
         std::unordered_set<communication::messages::types::EntityId> playersUsedRight;
         std::array<unsigned int, 5> availableFansLeft; //Teleport, RangedAttack, Impulse, SnitchPush, BlockCell
         std::array<unsigned int, 5> availableFansRight;
+
+        /**
+         * Computes a feature vecor from its members
+         * @param side side of the actin AI
+         * @return array of doubles
+         */
+        auto getFeatureVec(gameModel::TeamSide side) const -> std::array<double, FEATURE_VEC_LEN>;
     };
 
     template <typename T>
