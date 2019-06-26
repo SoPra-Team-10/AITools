@@ -147,3 +147,94 @@ TEST(ai_test, getNextFanTurn4){
         EXPECT_TRUE(snitchPush.isPossible());
     }
 }
+
+//------------------------------------------compute best action---------------------------------------------------------
+
+TEST(ai_test, computeBestMove){
+    using namespace communication::messages;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    auto playerId = types::EntityId::LEFT_CHASER3;
+    auto res = aiTools::computeBestMove(state, [](const aiTools::State &){ return 0;},playerId);
+    EXPECT_EQ(res.getActiveEntity(), playerId);
+    EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::MOVE, types::DeltaType::SKIP));
+    if(res.getDeltaType() == types::DeltaType::MOVE){
+        gameController::Move move(env, env->getPlayerById(playerId), {res.getXPosNew().value(), res.getYPosNew().value()});
+        EXPECT_NE(move.check(), gameController::ActionCheckResult::Impossible);
+    }
+}
+
+TEST(ai_test, computeBestShot){
+    using namespace communication::messages;
+    auto env = setup::createEnv({0, {}, {1, 0, 0, 0, 0}, {}});
+    aiTools::State state;
+    state.env = env;
+    env->quaffle->position = env->team1->chasers[1]->position;
+    auto playerId = types::EntityId::LEFT_CHASER2;
+    auto res = aiTools::computeBestShot(state, [](const aiTools::State &){ return 0;}, playerId);
+    EXPECT_EQ(res.getActiveEntity(), playerId);
+    EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::QUAFFLE_THROW, types::DeltaType::SKIP));
+    if(res.getDeltaType() == types::DeltaType::QUAFFLE_THROW){
+        gameController::Shot shot(env, env->getPlayerById(playerId), env->quaffle, {res.getXPosNew().value(), res.getYPosNew().value()});
+        EXPECT_NE(shot.check(), gameController::ActionCheckResult::Impossible);
+    }
+}
+
+TEST(ai_test, computeBestShotBludger){
+    using namespace communication::messages;
+    auto env = setup::createEnv({0, {}, {1, 1, 0, 0, 0}, {}});
+    aiTools::State state;
+    state.env = env;
+    env->bludgers[0]->position = env->team1->beaters[1]->position;
+    auto playerId = types::EntityId::LEFT_BEATER2;
+    auto res = aiTools::computeBestShot(state, [](const aiTools::State &){ return 0;}, playerId);
+    EXPECT_EQ(res.getActiveEntity(), playerId);
+    EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::BLUDGER_BEATING, types::DeltaType::SKIP));
+    if(res.getDeltaType() == types::DeltaType::BLUDGER_BEATING){
+        EXPECT_EQ(res.getPassiveEntity(), types::EntityId::BLUDGER1);
+        gameController::Shot shot(env, env->getPlayerById(playerId), env->bludgers[0], {res.getXPosNew().value(), res.getYPosNew().value()});
+        EXPECT_NE(shot.check(), gameController::ActionCheckResult::Impossible);
+    }
+}
+
+TEST(ai_test, computeBestWrest){
+    using namespace communication::messages;
+    auto env = setup::createEnv({0, {}, {1, 1, 0, 0, 1}, {}});
+    aiTools::State state;
+    state.env = env;
+    env->quaffle->position = env->team1->chasers[1]->position;
+    env->team2->chasers[0]->position = {8, 4};
+    auto playerId = types::EntityId::RIGHT_CHASER1;
+    auto res = aiTools::computeBestWrest(state, [](const aiTools::State &){ return 0;}, playerId);
+    EXPECT_EQ(res.getActiveEntity(), playerId);
+    EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::WREST_QUAFFLE, types::DeltaType::SKIP));
+    if(res.getDeltaType() == types::DeltaType::WREST_QUAFFLE){
+        auto player = std::dynamic_pointer_cast<gameModel::Chaser>(env->getPlayerById(playerId));
+        if(!player){
+            throw std::runtime_error("No Chaser!!") ;
+        }
+
+        gameController::WrestQuaffle wrest(env, player, env->quaffle->position);
+        EXPECT_NE(wrest.check(), gameController::ActionCheckResult::Impossible);
+    }
+}
+//-------------------------------------redeploy-------------------------------------------------------------------------
+
+TEST(ai_test, redeploy){
+    using namespace communication::messages;
+    auto id = communication::messages::types::EntityId::LEFT_SEEKER;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    env->getPlayerById(id)->isFined = true;
+    auto res = aiTools::redeployPlayer(state, [](const aiTools::State &){ return 0;}, id);
+    EXPECT_EQ(res.getDeltaType(), types::DeltaType::UNBAN);
+    EXPECT_EQ(res.getActiveEntity(), id);
+    gameModel::Position pos{res.getXPosNew().value(), res.getYPosNew().value()};
+    EXPECT_TRUE(env->cellIsFree(pos));
+    EXPECT_FALSE(env->isShitOnCell(pos));
+    EXPECT_NE(gameModel::Environment::getCell(pos), gameModel::Cell::GoalLeft);
+    EXPECT_NE(gameModel::Environment::getCell(pos), gameModel::Cell::GoalRight);
+}
+
