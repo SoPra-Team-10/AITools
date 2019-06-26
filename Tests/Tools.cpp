@@ -68,3 +68,82 @@ TEST(ai_test, optimal_path_impossible){
     auto path = aiTools::computeOptimalPath(env->team2->seeker, env->team1->keeper->position, env);
     EXPECT_EQ(path.size(), 0);
 }
+
+//------------------------------------------Interference Useful Tests--------------------------------------------------
+
+TEST(ai_test, getNextFanTurn0){
+    using namespace communication::messages;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    broadcast::Next next{types::EntityId::LEFT_GOBLIN, types::TurnType::FAN, 0};
+    auto deltaRequest = aiTools::getNextFanTurn(state, next);
+    EXPECT_THAT(deltaRequest.getDeltaType(), testing::AnyOf(types::DeltaType::SKIP, types::DeltaType::GOBLIN_SHOCK));
+    if(deltaRequest.getDeltaType() == types::DeltaType::GOBLIN_SHOCK) {
+        std::optional<types::EntityId> entityId = deltaRequest.getPassiveEntity();
+        if(entityId.has_value()) {
+            auto player = env->getPlayerById(entityId.value());
+            gameController::RangedAttack rangedAttack {env, env->team2, player};
+            EXPECT_TRUE(rangedAttack.isPossible());
+        }
+    }
+}
+
+TEST(ai_test, getNextFanTurn1){
+    using namespace communication::messages;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    broadcast::Next next{types::EntityId::LEFT_WOMBAT, types::TurnType::FAN, 0};
+    auto deltaRequest = aiTools::getNextFanTurn(state, next);
+    EXPECT_THAT(deltaRequest.getDeltaType(), testing::AnyOf (types::DeltaType::SKIP, types::DeltaType::WOMBAT_POO));
+}
+
+TEST(ai_test, getNextFanTurn2){
+    using namespace communication::messages;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    broadcast::Next next{types::EntityId::LEFT_TROLL, types::TurnType::FAN, 0};
+    auto deltaRequest = aiTools::getNextFanTurn(state, next);
+    EXPECT_THAT(deltaRequest.getDeltaType(), testing::AnyOf(types::DeltaType::SKIP, types::DeltaType::TROLL_ROAR));
+    if(deltaRequest.getDeltaType() == types::DeltaType::TROLL_ROAR) {
+        gameController::Impulse impulse {env, env->team2};
+        EXPECT_TRUE(impulse.isPossible());
+    }
+}
+
+TEST(ai_test, getNextFanTurn3){
+    using namespace communication::messages;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    env->snitch->exists = true;
+    broadcast::Next next{types::EntityId::LEFT_ELF, types::TurnType::FAN, 0};
+    auto deltaRequest = aiTools::getNextFanTurn(state, next);
+    EXPECT_THAT(deltaRequest.getDeltaType(), testing::AnyOf(types::DeltaType::SKIP, types::DeltaType::ELF_TELEPORTATION));
+    if(deltaRequest.getDeltaType() == types::DeltaType::ELF_TELEPORTATION) {
+        auto entityId = deltaRequest.getPassiveEntity();
+        if(entityId.has_value()) {
+            auto player = env->getPlayerById(entityId.value());
+            gameController::Teleport teleport {env, env->team2, player};
+            EXPECT_TRUE(teleport.isPossible());
+            EXPECT_TRUE(env->getTeam(player)->side == gameModel::TeamSide::RIGHT);
+        }
+    }
+}
+
+TEST(ai_test, getNextFanTurn4){
+    using namespace communication::messages;
+    auto env = setup::createEnv();
+    aiTools::State state;
+    state.env = env;
+    env->snitch->exists = true;
+    broadcast::Next next{types::EntityId::LEFT_NIFFLER, types::TurnType::FAN, 0};
+    auto deltaRequest = aiTools::getNextFanTurn(state, next);
+    EXPECT_THAT(deltaRequest.getDeltaType(), testing::AnyOf(types::DeltaType::SKIP, types::DeltaType::SNITCH_SNATCH));
+    if(deltaRequest.getDeltaType() == communication::messages::types::DeltaType::SNITCH_SNATCH) {
+        gameController::SnitchPush snitchPush {env, env->team2};
+        EXPECT_TRUE(snitchPush.isPossible());
+    }
+}
