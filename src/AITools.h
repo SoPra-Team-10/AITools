@@ -168,7 +168,7 @@ namespace aiTools{
         auto envEvalFun = [&state, &evalFun](const std::shared_ptr<gameModel::Environment> &env){
             auto stateTmp = state;
             stateTmp.env = env;
-            return evalFun(state);
+            return evalFun(stateTmp);
         };
 
         auto [best, score] = aiTools::chooseBestAction(moves, envEvalFun);
@@ -205,7 +205,7 @@ namespace aiTools{
         auto envEvalFun = [&state, &evalFun](const std::shared_ptr<gameModel::Environment> &env){
             auto stateTmp = state;
             stateTmp.env = env;
-            return evalFun(state);
+            return evalFun(stateTmp);
         };
 
         auto [best, score] = aiTools::chooseBestAction(shots, envEvalFun);
@@ -251,7 +251,7 @@ namespace aiTools{
         auto envEvalFun = [&state, &evalFun](const std::shared_ptr<gameModel::Environment> &env){
             auto stateTmp = state;
             stateTmp.env = env;
-            return evalFun(state);
+            return evalFun(stateTmp);
         };
 
         auto currentScore = evalFun(state);
@@ -283,7 +283,7 @@ namespace aiTools{
         auto envEvalFun = [&state, &evalFun](const std::shared_ptr<gameModel::Environment> &env){
             auto stateTmp = state;
             stateTmp.env = env;
-            return evalFun(state);
+            return evalFun(stateTmp);
         };
 
         using namespace communication::messages;
