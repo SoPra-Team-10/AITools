@@ -175,13 +175,22 @@ namespace aiTools{
         pos.x = FIELD_WIDTH - pos.x;
     }
 
+    int maybeMirrorX(const int &x, bool necessary) {
+        if(necessary){
+            return FIELD_WIDTH - x;
+        } else {
+            return x;
+        }
+    }
+
     auto State::getFeatureVec(gameModel::TeamSide side) const -> std::array<double, 122> {
-                std::array<double, FEATURE_VEC_LEN> ret = {};
-        auto insertTeam = [this](gameModel::TeamSide side, std::array<double, 120>::iterator &it){
+        std::array<double, FEATURE_VEC_LEN> ret = {};
+        bool mirror = side == gameModel::TeamSide::RIGHT;
+        auto insertTeam = [this, mirror](gameModel::TeamSide side, std::array<double, 120>::iterator &it){
             auto &usedPlayers = side == gameModel::TeamSide::LEFT ? playersUsedLeft : playersUsedRight;
             auto &availableFans = side == gameModel::TeamSide::LEFT ? availableFansLeft : availableFansRight;
             for(const auto &player : env->getTeam(side)->getAllPlayers()){
-                *it++ = player->position.x;
+                *it++ = maybeMirrorX(player->position.x, mirror);
                 *it++ = player->position.y;
                 bool used = false;
                 for(const auto &id : usedPlayers){
@@ -212,7 +221,7 @@ namespace aiTools{
         ret[6] = env->getTeam(opponentSide)->score;
         auto it = ret.begin() + 7;
         for(const auto &shit : env->pileOfShit){
-            *it++ = shit->position.x;
+            *it++ = maybeMirrorX(shit->position.x, mirror);
             *it++ = shit->position.y;
         }
 
@@ -221,13 +230,13 @@ namespace aiTools{
             *it++ = 0;
         }
 
-        ret[19] = env->quaffle->position.x;
+        ret[19] = maybeMirrorX(env->quaffle->position.x, mirror);
         ret[20] = env->quaffle->position.y;
-        ret[21] = env->bludgers[0]->position.x;
+        ret[21] = maybeMirrorX(env->bludgers[0]->position.x, mirror);
         ret[22] = env->bludgers[0]->position.y;
-        ret[23] = env->bludgers[1]->position.x;
+        ret[23] = maybeMirrorX(env->bludgers[1]->position.x, mirror);
         ret[24] = env->bludgers[1]->position.y;
-        ret[25] = env->snitch->position.x;
+        ret[25] = maybeMirrorX(env->snitch->position.x, mirror);
         ret[26] = env->snitch->position.y;
         ret[27] = env->snitch->exists;
         it = ret.begin() + 28;

@@ -118,6 +118,7 @@ TEST(ai_test, getNextFanTurn3){
     auto env = setup::createEnv();
     aiTools::State state;
     state.env = env;
+    state.overtimeState = gameController::ExcessLength::None;
     env->snitch->exists = true;
     broadcast::Next next{types::EntityId::LEFT_ELF, types::TurnType::FAN, 0};
     auto deltaRequest = aiTools::getNextFanTurn(state, next);
