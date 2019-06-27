@@ -48,7 +48,7 @@ git clone -b gh-pages https://git@$GH_REPO_REF
 cd $GH_REPO_NAME
 
 # Copy the README
-rm README.md
+rm -f README.md
 cp ${TRAVIS_BUILD_DIR}/README.md .
 
 ##### Configure git.
