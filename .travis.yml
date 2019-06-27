@@ -33,4 +33,4 @@ after_success:
   - ./generateDocumentationAndDeploy.sh
   
 notifications:
-    slack: soprateam10:wlcgvL7tR63frGyGP4BCuqNj
+    slack: soprateam10:${SLACK_TOKEN}
