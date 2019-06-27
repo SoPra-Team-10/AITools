@@ -2,7 +2,7 @@
 
 echo "Current Branch: $TRAVIS_BRANCH"
 
-if [ "$TRAVIS_BRANCH" == "master" ] || [ "$TRAVIS_BRANCH" == "Develop" ] || [ "$TRAVIS_BRANCH" == "sonarcloud" ]; then
+if [ "$TRAVIS_BRANCH" == "master" ] || [ "$TRAVIS_BRANCH" == "develop" ] || [ "$TRAVIS_BRANCH" == "sonarcloud" ]; then
 
     echo "INSTALLING SOME TOOLS"
     apt-get install -y  wget unzip bash
