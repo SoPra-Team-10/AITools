@@ -3,6 +3,7 @@
 //
 
 #include "AITools.h"
+#include <SopraGameLogic/SharedPtrSerialization.h>
 
 namespace aiTools{
     constexpr int distanceSnitchSeeker = 2;
@@ -97,7 +98,7 @@ namespace aiTools{
     }
 
     bool isNifflerUseful(const gameModel::TeamSide &mySide, const State &state){
-        if (mySide == state.env->team1->side) {
+        if (mySide == state.env->team1->getSide()) {
             return gameController::getDistance(state.env->team2->seeker->position, state.env->snitch->position) <= distanceSnitchSeeker;
         }else{
             return gameController::getDistance(state.env->team1->seeker->position, state.env->snitch->position) <= distanceSnitchSeeker;
@@ -107,7 +108,7 @@ namespace aiTools{
     bool isTrollUseful(const gameModel::TeamSide &mySide, const State &state) {
         auto player = state.env->getPlayer(state.env->quaffle->position);
         if(player.has_value()) {
-            if(mySide != state.env->getTeam(player.value())->side) {
+            if(mySide != state.env->getTeam(player.value())->getSide()) {
                 return true;
             }
         }
@@ -124,7 +125,7 @@ namespace aiTools{
         for(const auto &goal : opponentGoals){
             auto player = state.env->getPlayer(goal);
             if(player.has_value() && !state.env->getTeam(mySide)->hasMember(player.value())){
-                return player.value()->id;
+                return player.value()->getId();
             }
         }
         return std::nullopt;
@@ -134,13 +135,13 @@ namespace aiTools{
         if(state.env->snitch->exists) {
             std::shared_ptr<gameModel::Environment> environment = state.env->clone();
             gameController::moveSnitch(environment->snitch, environment, state.overtimeState);
-            if (mySide == environment->team1->side) {
+            if (mySide == environment->team1->getSide()) {
                 if (gameController::getDistance(environment->team2->seeker->position, environment->snitch->position) <= distanceSnitchSeeker) {
-                    return environment->team2->seeker->id;
+                    return environment->team2->seeker->getId();
                 }
             } else {
                 if (gameController::getDistance(environment->team1->seeker->position, environment->snitch->position) <= distanceSnitchSeeker) {
-                    return environment->team1->seeker->id;
+                    return environment->team1->seeker->getId();
                 }
             }
         }
@@ -183,6 +184,32 @@ namespace aiTools{
         }
     }
 
+    void to_json(nlohmann::json &j, const State &state) {
+        j["environment"] = state.env;
+        j["round"] = state.roundNumber;
+        j["phase"] = state.currentPhase;
+        j["overTimeState"] = state.overtimeState;
+        j["overTimeCounter"] = state.overTimeCounter;
+        j["goalScoredThisRound"] = state.goalScoredThisRound;
+        j["playersUsedLeft"] = state.playersUsedLeft;
+        j["playersUsedRight"] = state.playersUsedRight;
+        j["fansLeft"] = state.availableFansLeft;
+        j["fansRight"] = state.availableFansRight;
+    }
+
+    void from_json(const nlohmann::json &j, State &state) {
+        using namespace communication::messages::types;
+        state.env = j.at("environment").get<std::shared_ptr<gameModel::Environment>>();
+        state.roundNumber = j.at("round").get<unsigned int>();
+        state.currentPhase = j.at("phase").get<PhaseType>();
+        state.overtimeState = j.at("overTimeState").get<gameController::ExcessLength>();
+        state.overTimeCounter = j.at("overTimeCounter").get<unsigned int>();
+        state.playersUsedLeft = j.at("playersUsedLeft").get<std::unordered_set<EntityId>>();
+        state.playersUsedRight = j.at("playersUsedRight").get<std::unordered_set<EntityId>>();
+        state.availableFansLeft = j.at("fansLeft").get<std::array<unsigned int, 5>>();
+        state.availableFansRight = j.at("fansRight").get<std::array<unsigned int, 5>>();
+    }
+
     auto State::getFeatureVec(gameModel::TeamSide side) const -> std::array<double, 122> {
         std::array<double, FEATURE_VEC_LEN> ret = {};
         bool mirror = side == gameModel::TeamSide::RIGHT;
@@ -194,7 +221,7 @@ namespace aiTools{
                 *it++ = player->position.y;
                 bool used = false;
                 for(const auto &id : usedPlayers){
-                    if(player->id == id){
+                    if(player->getId() == id){
                         used = true;
                         break;
                     }
