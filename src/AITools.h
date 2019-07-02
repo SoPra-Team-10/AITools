@@ -17,6 +17,7 @@
 #include <SopraMessages/Next.hpp>
 #include <SopraMessages/DeltaRequest.hpp>
 #include <unordered_set>
+#include <SopraMessages/json.hpp>
 
 namespace aiTools{
     constexpr auto minShotSuccessProb = 0.2;
@@ -32,7 +33,7 @@ namespace aiTools{
         unsigned int overTimeCounter = 0;
         bool goalScoredThisRound = false;
         std::unordered_set<communication::messages::types::EntityId> playersUsedLeft = {};
-        std::unordered_set<communication::messages::types::EntityId> playersUsedRight ={};
+        std::unordered_set<communication::messages::types::EntityId> playersUsedRight = {};
         std::array<unsigned int, 5> availableFansLeft = {}; //Teleport, RangedAttack, Impulse, SnitchPush, BlockCell
         std::array<unsigned int, 5> availableFansRight = {};
 
@@ -43,6 +44,9 @@ namespace aiTools{
          */
         auto getFeatureVec(gameModel::TeamSide side) const -> std::array<double, FEATURE_VEC_LEN>;
     };
+
+    void to_json(nlohmann::json &j, const State &state);
+    void from_json(const nlohmann::json &j, State &state);
 
     template <typename T>
     class SearchNode {
@@ -229,7 +233,7 @@ namespace aiTools{
                                          best->getTarget().y, id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
         } else if(INSTANCE_OF(best->getBall(), const gameModel::Bludger)){
             return request::DeltaRequest{types::DeltaType::BLUDGER_BEATING, std::nullopt, std::nullopt, std::nullopt, best->getTarget().x,
-                                         best->getTarget().y, id, best->getBall()->id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                                         best->getTarget().y, id, best->getBall()->getId(), std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
         } else {
             throw std::runtime_error("Invalid shot was calculated");
         }

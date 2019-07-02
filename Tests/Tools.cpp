@@ -129,7 +129,7 @@ TEST(ai_test, getNextFanTurn3){
             auto player = env->getPlayerById(entityId.value());
             gameController::Teleport teleport {env, env->team2, player};
             EXPECT_TRUE(teleport.isPossible());
-            EXPECT_TRUE(env->getTeam(player)->side == gameModel::TeamSide::RIGHT);
+            EXPECT_TRUE(env->getTeam(player)->getSide() == gameModel::TeamSide::RIGHT);
         }
     }
 }
@@ -237,5 +237,32 @@ TEST(ai_test, redeploy){
     EXPECT_FALSE(env->isShitOnCell(pos));
     EXPECT_NE(gameModel::Environment::getCell(pos), gameModel::Cell::GoalLeft);
     EXPECT_NE(gameModel::Environment::getCell(pos), gameModel::Cell::GoalRight);
+}
+
+//----------------------------------------serialize---------------------------------------------------------------------
+
+TEST(ai_test, serialize_and_deserialize){
+    using B = communication::messages::types::Broom;
+    std::map<B, double> brooms;
+    brooms.emplace(B::TINDERBLAST, 0.5);
+    brooms.emplace(B::CLEANSWEEP11, 0.6);
+    brooms.emplace(B::COMET260, 0.7);
+    brooms.emplace(B::NIMBUS2001, 0.8);
+    brooms.emplace(B::FIREBOLT, 0.9);
+    auto env = setup::createEnv({0, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1}, brooms});
+    aiTools::State state;
+    state.env = env;
+    nlohmann::json json;
+    json = state;
+    auto newState = json.get<aiTools::State>();
+    EXPECT_EQ(state.overTimeCounter, newState.overTimeCounter);
+    EXPECT_EQ(state.overtimeState, newState.overtimeState);
+    EXPECT_EQ(state.currentPhase, newState.currentPhase);
+    EXPECT_EQ(state.roundNumber, newState.roundNumber);
+    EXPECT_EQ(state.goalScoredThisRound, newState.goalScoredThisRound);
+    EXPECT_EQ(state.availableFansRight, newState.availableFansRight);
+    EXPECT_EQ(state.availableFansLeft, newState.availableFansLeft);
+    EXPECT_EQ(state.playersUsedRight, newState.playersUsedRight);
+    EXPECT_EQ(state.playersUsedLeft, newState.playersUsedLeft);
 }
 
