@@ -255,6 +255,7 @@ TEST(ai_test, serialize_and_deserialize){
     nlohmann::json json;
     json = state;
     auto newState = json.get<aiTools::State>();
+    EXPECT_EQ(*state.env, *newState.env);
     EXPECT_EQ(state.overTimeCounter, newState.overTimeCounter);
     EXPECT_EQ(state.overtimeState, newState.overtimeState);
     EXPECT_EQ(state.currentPhase, newState.currentPhase);
