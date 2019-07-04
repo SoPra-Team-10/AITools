@@ -18,6 +18,7 @@
 #include <SopraMessages/DeltaRequest.hpp>
 #include <unordered_set>
 #include <SopraMessages/json.hpp>
+#include <atomic>
 
 namespace aiTools{
     constexpr auto minShotSuccessProb = 0.2;
@@ -131,11 +132,13 @@ namespace aiTools{
      * @tparam EvalFun type of function used for evaluating the actions' outcomes
      * @param actionList list of actions to evaluate
      * @param evalFun evaluation function for comparing outcomes of actions
-     * @return tuple of the best Action and its score
+     * @param abort atomic flag used to abort the computation. If set to true, the currently best result will be returned
+     * @return tuple of the best Action and its score or nothing if no result was found in time
      */
     template <typename ActionType, typename EvalFun>
-    auto chooseBestAction(const std::vector<ActionType> &actionList, const EvalFun &evalFun) ->
-        std::tuple<typename std::vector<ActionType>::const_iterator, double>{
+    auto chooseBestAction(const std::vector<ActionType> &actionList, const EvalFun &evalFun, const std::atomic_bool &abort) ->
+        std::optional<std::tuple<typename std::vector<ActionType>::const_iterator, double>>{
+        std::optional<std::tuple<typename std::vector<ActionType>::const_iterator, double>> ret;
         if(actionList.empty()){
             throw std::runtime_error("List is empty. Cannot choose best entry");
         }
@@ -143,6 +146,10 @@ namespace aiTools{
         double highestScore = -std::numeric_limits<double>::infinity();
         std::optional<typename std::vector<ActionType>::const_iterator> best;
         for(auto action = actionList.begin(); action < actionList.end(); ++action){
+            if(abort){
+                break;
+            }
+
             double tmpScore = 0;
             for(const auto &outcome : action->executeAll()){
                 tmpScore += outcome.second * evalFun(outcome.first);
@@ -154,11 +161,11 @@ namespace aiTools{
             }
         }
 
-        if(!best.has_value()){
-            throw std::runtime_error("No best candidate found");
+        if(best.has_value()){
+            ret.emplace(*best, highestScore);
         }
 
-        return {best.value(), highestScore};
+        return ret;
     }
 
     /**
@@ -166,11 +173,12 @@ namespace aiTools{
      * @tparam EvalFun type of evaluation function for a state. Must return a comparable type
      * @param state the current game state
      * @param id the ID of the player to make a move
+     * @param abort atomic flag used to abort the computation.
      * @throws std::runtime_error when no move is possible
      * @return next move as DeltaRequest
      */
     template <typename EvalFun>
-    auto computeBestMove(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id) ->
+    auto computeBestMove(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const std::atomic_bool &abort) ->
         communication::messages::request::DeltaRequest{
         using namespace communication::messages;
         auto player = state.env->getPlayerById(id);
@@ -185,7 +193,13 @@ namespace aiTools{
             return evalFun(stateTmp);
         };
 
-        auto [best, score] = aiTools::chooseBestAction(moves, envEvalFun);
+        auto res = aiTools::chooseBestAction(moves, envEvalFun, abort);
+        if(!res.has_value()){
+            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+        }
+
+        auto [best, score] = *res;
         if(score < evalFun(state)) {
             return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, id,
                                          std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
@@ -201,11 +215,12 @@ namespace aiTools{
      * @param state the current game state
      * @param evalFun the function used for evaluation a game state
      * @param id the ID of the player to perform a shot
+     * @param abort atomic flag used to abort the computation.
      * @throws std::runtime_error when no shot is possible
      * @return next shot as DeltaRequest
      */
     template <typename EvalFun>
-    auto computeBestShot(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id) ->
+    auto computeBestShot(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const std::atomic_bool &abort) ->
         communication::messages::request::DeltaRequest{
         using namespace communication::messages;
         auto player = state.env->getPlayerById(id);
@@ -222,7 +237,13 @@ namespace aiTools{
             return evalFun(stateTmp);
         };
 
-        auto [best, score] = aiTools::chooseBestAction(shots, envEvalFun);
+        auto res = aiTools::chooseBestAction(shots, envEvalFun, abort);
+        if(!res.has_value()){
+            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+        }
+
+        auto [best, score] = *res;
         if(score < evalFun(state)){
             return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, id,
                                          std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
@@ -250,7 +271,8 @@ namespace aiTools{
      * @return next wrest as DeltaRequest
      */
     template <typename EvalFun>
-    auto computeBestWrest(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id) -> communication::messages::request::DeltaRequest{
+    auto computeBestWrest(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id) ->
+        communication::messages::request::DeltaRequest{
         using namespace communication::messages;
         auto player = std::dynamic_pointer_cast<gameModel::Chaser>(state.env->getPlayerById(id));
         if(!player){
@@ -289,10 +311,11 @@ namespace aiTools{
      * @param state the current game state
      * @param evalFun the function used for evaluation a game state
      * @param id the ID of the player to perform a shot
+     * @param abort atomic flag used to abort the computation.
      * @return unban request as DeltaRequest
      */
     template <typename EvalFun>
-    auto redeployPlayer(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id)
+    auto redeployPlayer(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const std::atomic_bool &abort)
     -> communication::messages::request::DeltaRequest{
         auto envEvalFun = [&state, &evalFun](const std::shared_ptr<gameModel::Environment> &env){
             auto stateTmp = state;
@@ -305,6 +328,10 @@ namespace aiTools{
         auto bestScore = -std::numeric_limits<double>::infinity();
         gameModel::Position redeployPos(0, 0);
         for(const auto &pos : state.env->getFreeCellsForRedeploy(mySide)){
+            if(abort){
+                break;
+            }
+
             auto newEnv = state.env->clone();
             newEnv->getPlayerById(id)->position = pos;
             newEnv->getPlayerById(id)->isFined = false;
@@ -315,6 +342,10 @@ namespace aiTools{
             }
         }
 
+        if(redeployPos == gameModel::Position{0, 0}){
+            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+        }
 
         return request::DeltaRequest{types::DeltaType::UNBAN, std::nullopt, std::nullopt, std::nullopt, redeployPos.x, redeployPos.y, id,
                                      std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
