@@ -132,11 +132,11 @@ namespace aiTools{
      * @tparam EvalFun type of function used for evaluating the actions' outcomes
      * @param actionList list of actions to evaluate
      * @param evalFun evaluation function for comparing outcomes of actions
-     * @param abort atomic flag used to abort the computation. If set to true, the currently best result will be returned
+     * @param abort flag used to abort the computation. If set to true, the currently best result will be returned
      * @return tuple of the best Action and its score or nothing if no result was found in time
      */
     template <typename ActionType, typename EvalFun>
-    auto chooseBestAction(const std::vector<ActionType> &actionList, const EvalFun &evalFun, const std::atomic_bool &abort) ->
+    auto chooseBestAction(const std::vector<ActionType> &actionList, const EvalFun &evalFun, const bool &abort) ->
         std::optional<std::tuple<typename std::vector<ActionType>::const_iterator, double>>{
         std::optional<std::tuple<typename std::vector<ActionType>::const_iterator, double>> ret;
         if(actionList.empty()){
@@ -173,12 +173,12 @@ namespace aiTools{
      * @tparam EvalFun type of evaluation function for a state. Must return a comparable type
      * @param state the current game state
      * @param id the ID of the player to make a move
-     * @param abort atomic flag used to abort the computation.
+     * @param abort flag used to abort the computation.
      * @throws std::runtime_error when no move is possible
      * @return next move as DeltaRequest
      */
     template <typename EvalFun>
-    auto computeBestMove(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const std::atomic_bool &abort) ->
+    auto computeBestMove(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const bool &abort) ->
         communication::messages::request::DeltaRequest{
         using namespace communication::messages;
         auto player = state.env->getPlayerById(id);
@@ -215,12 +215,12 @@ namespace aiTools{
      * @param state the current game state
      * @param evalFun the function used for evaluation a game state
      * @param id the ID of the player to perform a shot
-     * @param abort atomic flag used to abort the computation.
+     * @param abort flag used to abort the computation.
      * @throws std::runtime_error when no shot is possible
      * @return next shot as DeltaRequest
      */
     template <typename EvalFun>
-    auto computeBestShot(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const std::atomic_bool &abort) ->
+    auto computeBestShot(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const bool &abort) ->
         communication::messages::request::DeltaRequest{
         using namespace communication::messages;
         auto player = state.env->getPlayerById(id);
@@ -311,11 +311,11 @@ namespace aiTools{
      * @param state the current game state
      * @param evalFun the function used for evaluation a game state
      * @param id the ID of the player to perform a shot
-     * @param abort atomic flag used to abort the computation.
+     * @param abort flag used to abort the computation.
      * @return unban request as DeltaRequest
      */
     template <typename EvalFun>
-    auto redeployPlayer(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const std::atomic_bool &abort)
+    auto redeployPlayer(const State &state, const EvalFun &evalFun, communication::messages::types::EntityId id, const bool &abort)
     -> communication::messages::request::DeltaRequest{
         auto envEvalFun = [&state, &evalFun](const std::shared_ptr<gameModel::Environment> &env){
             auto stateTmp = state;
