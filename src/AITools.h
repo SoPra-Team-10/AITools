@@ -18,7 +18,6 @@
 #include <SopraMessages/DeltaRequest.hpp>
 #include <unordered_set>
 #include <SopraMessages/json.hpp>
-#include <atomic>
 
 namespace aiTools{
     constexpr auto minShotSuccessProb = 0.2;
