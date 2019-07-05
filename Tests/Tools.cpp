@@ -157,7 +157,7 @@ TEST(ai_test, computeBestMove){
     aiTools::State state;
     state.env = env;
     auto playerId = types::EntityId::LEFT_CHASER3;
-    auto res = aiTools::computeBestMove(state, [](const aiTools::State &){ return 0;},playerId);
+    auto res = aiTools::computeBestMove(state, [](const aiTools::State &){ return 0;}, playerId, false);
     EXPECT_EQ(res.getActiveEntity(), playerId);
     EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::MOVE, types::DeltaType::SKIP));
     if(res.getDeltaType() == types::DeltaType::MOVE){
@@ -173,7 +173,7 @@ TEST(ai_test, computeBestShot){
     state.env = env;
     env->quaffle->position = env->team1->chasers[1]->position;
     auto playerId = types::EntityId::LEFT_CHASER2;
-    auto res = aiTools::computeBestShot(state, [](const aiTools::State &){ return 0;}, playerId);
+    auto res = aiTools::computeBestShot(state, [](const aiTools::State &){ return 0;}, playerId, false);
     EXPECT_EQ(res.getActiveEntity(), playerId);
     EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::QUAFFLE_THROW, types::DeltaType::SKIP));
     if(res.getDeltaType() == types::DeltaType::QUAFFLE_THROW){
@@ -189,7 +189,7 @@ TEST(ai_test, computeBestShotBludger){
     state.env = env;
     env->bludgers[0]->position = env->team1->beaters[1]->position;
     auto playerId = types::EntityId::LEFT_BEATER2;
-    auto res = aiTools::computeBestShot(state, [](const aiTools::State &){ return 0;}, playerId);
+    auto res = aiTools::computeBestShot(state, [](const aiTools::State &){ return 0;}, playerId, false);
     EXPECT_EQ(res.getActiveEntity(), playerId);
     EXPECT_THAT(res.getDeltaType(), testing::AnyOf(types::DeltaType::BLUDGER_BEATING, types::DeltaType::SKIP));
     if(res.getDeltaType() == types::DeltaType::BLUDGER_BEATING){
@@ -229,7 +229,7 @@ TEST(ai_test, redeploy){
     aiTools::State state;
     state.env = env;
     env->getPlayerById(id)->isFined = true;
-    auto res = aiTools::redeployPlayer(state, [](const aiTools::State &){ return 0;}, id);
+    auto res = aiTools::redeployPlayer(state, [](const aiTools::State &){ return 0;}, id, false);
     EXPECT_EQ(res.getDeltaType(), types::DeltaType::UNBAN);
     EXPECT_EQ(res.getActiveEntity(), id);
     gameModel::Position pos{res.getXPosNew().value(), res.getYPosNew().value()};
