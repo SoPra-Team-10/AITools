@@ -136,7 +136,7 @@ namespace aiTools{
                 double currentOutcomeExpectedValue = 0;
                 auto nextActors = computeNextActionStates(newState, actionState);
                 for(const auto &nextActor : nextActors){
-                    currentOutcomeExpectedValue += alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth, evalFun).second;
+                    currentOutcomeExpectedValue += alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun).second;
                 }
 
                 currentOutcomeExpectedValue /= nextActors.size();
@@ -161,11 +161,11 @@ namespace aiTools{
                     minMaxAction.emplace(action);
                 }
 
-                if(expectedValue >= alpha){
+                if(expectedValue <= alpha){
                     return std::make_pair(*minMaxAction, minMaxVal);
                 }
 
-                beta = std::max(beta, expectedValue);
+                beta = std::min(beta, expectedValue);
             }
         }
 
