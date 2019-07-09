@@ -210,6 +210,56 @@ namespace aiTools{
         state.availableFansRight = j.at("fansRight").get<std::array<unsigned int, 5>>();
     }
 
+    auto computeNextActionStates(const State &state,
+                                 const ActionState &actionState) -> std::vector<std::pair<State, ActionState>> {
+        using namespace gameLogic::conversions;
+        auto currentPlayer = state.env->getPlayerById(actionState.id);
+        if(currentPlayer->isFined || currentPlayer->knockedOut){
+            throw std::runtime_error("Player is incapacitated");
+        }
+
+        std::vector<std::pair<State, ActionState>> ret;
+        if(actionState.turnState == ActionState::TurnState::FirstMove &&
+            state.env->config.getExtraTurnProb(state.env->getPlayerById(actionState.id)->broom) > 0.5){
+            ret.emplace_back(state.clone(), ActionState{actionState.id, ActionState::TurnState::SecondMove});
+        } else if(actionState.turnState == ActionState::TurnState::Action ||
+            !gameController::playerCanPerformAction(state.env->getPlayerById(actionState.id), state.env)){
+            std::vector<communication::messages::types::EntityId> nextPlayers;
+            auto &usedPlayers = idToSide(actionState.id) == gameModel::TeamSide::LEFT ? state.playersUsedRight : state.playersUsedLeft;
+            ret.reserve(7 - usedPlayers.size());
+            auto nextSide = idToSide(actionState.id) == gameModel::TeamSide::LEFT ? gameModel::TeamSide::RIGHT : gameModel::TeamSide::LEFT;
+            for(const auto &player : state.env->getTeam(nextSide)->getAllPlayers()){
+                if(player->isFined || player->knockedOut){
+                    continue;
+                }
+
+                bool used = false;
+                for(auto id : usedPlayers){
+                    if(player->getId() == id){
+                        used = true;
+                        break;
+                    }
+                }
+
+                if(used){
+                    continue;
+                }
+
+                //Copy curent state
+                auto newState = state.clone();
+                //Insert last player as used
+                auto &usedPlayersNew = idToSide(actionState.id) == gameModel::TeamSide::LEFT ? newState.playersUsedLeft : newState.playersUsedRight;
+                usedPlayersNew.emplace(actionState.id);
+                ret.emplace_back(newState, ActionState{player->getId(), ActionState::TurnState::FirstMove});
+            }
+        } else {
+            ret.emplace_back(state.clone(), ActionState{actionState.id, ActionState::TurnState::Action});
+        }
+
+        return ret;
+    }
+
+
     auto State::getFeatureVec(gameModel::TeamSide side) const -> std::array<double, 122> {
         std::array<double, FEATURE_VEC_LEN> ret = {};
         bool mirror = side == gameModel::TeamSide::RIGHT;
@@ -271,4 +321,13 @@ namespace aiTools{
         insertTeam(opponentSide, it);
         return ret;
     }
+
+    State State::clone() const {
+        State ret = *this;
+        ret.env = this->env->clone();
+        return ret;
+    }
+
+    ActionState::ActionState(communication::messages::types::EntityId id, ActionState::TurnState turnState) :
+        id(id), turnState(turnState) {}
 }

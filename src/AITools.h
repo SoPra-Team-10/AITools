@@ -43,6 +43,12 @@ namespace aiTools{
          * @return array of doubles
          */
         auto getFeatureVec(gameModel::TeamSide side) const -> std::array<double, FEATURE_VEC_LEN>;
+
+        /**
+         * Returns a deep copy of itself
+         * @return
+         */
+        State clone() const;
     };
 
     void to_json(nlohmann::json &j, const State &state);
@@ -61,11 +67,114 @@ namespace aiTools{
     };
 
 
+    class ActionState{
+    public:
+        enum class TurnState{
+            FirstMove,
+            SecondMove,
+            Action
+        };
+
+        ActionState(communication::messages::types::EntityId id, TurnState turnState);
+        communication::messages::types::EntityId id;
+        TurnState turnState;
+    };
+
+    auto computeNextActionStates(const State &state, const ActionState &actionState) -> std::vector<std::pair<State, ActionState>>;
+
+    template <typename EvalFun>
+    auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
+                         double beta, int maxDepth, const EvalFun &evalFun) -> std::pair<std::shared_ptr<gameController::Action>, double> {
+        std::vector<std::shared_ptr<gameController::Action>> allActions;
+        auto currentPlayer = state.env->getPlayerById(actionState.id);
+        if(actionState.turnState == ActionState::TurnState::Action){
+            auto actionType = gameController::getPossibleBallActionType(currentPlayer, state.env);
+            if(!actionType.has_value()){
+                throw std::runtime_error("No action possible");
+            }
+
+            if(*actionType == gameController::ActionType::Throw){
+                auto tmp = gameController::getAllPossibleShots(currentPlayer, state.env, minShotSuccessProb);
+                for(const auto &a : tmp){
+                    allActions.emplace_back(std::make_shared<gameController::Shot>(a));
+                }
+            } else {
+                auto chaser = std::dynamic_pointer_cast<gameModel::Chaser>(currentPlayer);
+                if(!chaser){
+                    throw std::runtime_error("Player is no chaser");
+                }
+
+                allActions.emplace_back(std::make_shared<gameController::WrestQuaffle>(gameController::WrestQuaffle(state.env, chaser, state.env->quaffle->position)));
+            }
+        } else {
+            auto tmp = gameController::getAllPossibleMoves(currentPlayer, state.env);
+            allActions.reserve(tmp.size());
+            for(const auto &a : tmp){
+                allActions.emplace_back(std::make_shared<gameController::Move>(a));
+            }
+        }
+
+        double minMaxVal = std::numeric_limits<double>::infinity();
+        std::optional<std::shared_ptr<gameController::Action>> minMaxAction;
+        bool maxSearch = gameLogic::conversions::idToSide(actionState.id) == mySide;
+        if(maxSearch){
+            minMaxVal *= -1;
+        }
+
+        for(const auto &action : allActions){
+            double expectedValue = 0;
+            for(const auto &outcome : action->executeAll()){
+                const auto &currentEnv = outcome.first;
+                auto newState = state.clone();
+                newState.env = outcome.first;
+                newState.goalScoredThisRound = state.env->team1->score != newState.env->team1->score || state.env->team2->score != newState.env->team2->score;
+                auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
+                if(maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
+                    return {action, evalFun(newState)};
+                }
+
+                double currentOutcomeExpectedValue = 0;
+                auto nextActors = computeNextActionStates(newState, actionState);
+                for(const auto &nextActor : nextActors){
+                    currentOutcomeExpectedValue += alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth, evalFun).second;
+                }
+
+                currentOutcomeExpectedValue /= nextActors.size();
+                expectedValue += currentOutcomeExpectedValue * outcome.second;
+            }
+
+            if(maxSearch){
+                if(expectedValue > minMaxVal){
+                    minMaxVal = expectedValue;
+                    minMaxAction.emplace(action);
+                }
+
+                if(expectedValue >= beta){
+                    return std::make_pair(*minMaxAction, minMaxVal);
+                }
+
+                alpha = std::max(alpha, expectedValue);
+
+            } else {
+                if(expectedValue < minMaxVal){
+                    minMaxVal = expectedValue;
+                    minMaxAction.emplace(action);
+                }
+
+                if(expectedValue >= alpha){
+                    return std::make_pair(*minMaxAction, minMaxVal);
+                }
+
+                beta = std::max(beta, expectedValue);
+            }
+        }
+
+        return std::make_pair(*minMaxAction, minMaxVal);
+    }
     template<typename T>
     bool SearchNode<T>::operator==(const SearchNode<T> &other) const {
         return this->state == other.state;
     }
-
 
     /**
      * A*algorithm implemented as graph search
