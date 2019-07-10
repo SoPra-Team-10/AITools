@@ -84,7 +84,7 @@ namespace aiTools{
 
     template <typename EvalFun>
     auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
-                         double beta, int maxDepth, const EvalFun &evalFun) -> std::pair<std::shared_ptr<gameController::Action>, double> {
+                         double beta, int maxDepth, const EvalFun &evalFun, const bool &abort) -> std::pair<std::shared_ptr<gameController::Action>, double> {
         std::vector<std::shared_ptr<gameController::Action>> allActions;
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
@@ -129,14 +129,18 @@ namespace aiTools{
                 newState.env = outcome.first;
                 newState.goalScoredThisRound = state.env->team1->score != newState.env->team1->score || state.env->team2->score != newState.env->team2->score;
                 auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
-                if(maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
+                if(abort || maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
                     return {action, evalFun(newState)};
                 }
 
                 double currentOutcomeExpectedValue = 0;
                 auto nextActors = computeNextActionStates(newState, actionState);
                 for(const auto &nextActor : nextActors){
-                    currentOutcomeExpectedValue += alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun).second;
+                    currentOutcomeExpectedValue += alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort).second;
+                    //Bedingung kann hier zutreffen, da abort von außen verändert werden kann
+                    if(abort){
+                        return {action, evalFun(newState)};
+                    }
                 }
 
                 currentOutcomeExpectedValue /= nextActors.size();
@@ -150,7 +154,7 @@ namespace aiTools{
                 }
 
                 if(expectedValue >= beta){
-                    return std::make_pair(*minMaxAction, minMaxVal);
+                    return std::make_pair(minMaxAction.value(), minMaxVal);
                 }
 
                 alpha = std::max(alpha, expectedValue);
@@ -162,15 +166,49 @@ namespace aiTools{
                 }
 
                 if(expectedValue <= alpha){
-                    return std::make_pair(*minMaxAction, minMaxVal);
+                    return std::make_pair(minMaxAction.value(), minMaxVal);
                 }
 
                 beta = std::min(beta, expectedValue);
             }
         }
 
-        return std::make_pair(*minMaxAction, minMaxVal);
+        return std::make_pair(minMaxAction.value(), minMaxVal);
     }
+
+    template <typename EvalFun>
+    auto computeBestActionAlphaBeta(const State &state, const EvalFun &evalFun, const ActionState &actionState, int maxDepth, const bool &abort){
+        using namespace communication::messages;
+        auto [bestAction, bestScore] = alphaBetaSearch(state, actionState, gameLogic::conversions::idToSide(actionState.id),
+                -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), maxDepth, evalFun, abort);
+
+        if(bestScore > evalFun(state)){
+            return request::DeltaRequest{types::DeltaType::MOVE, std::nullopt, std::nullopt, std::nullopt, bestAction->getTarget().x,
+                                         bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+        } else {
+            if(INSTANCE_OF(bestAction, gameController::Move)){
+                return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                             std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+            } else if(INSTANCE_OF(bestAction, gameController::Shot)){
+                auto shot = std::dynamic_pointer_cast<gameController::Shot>(bestAction);
+                if(INSTANCE_OF(shot->getBall(), const gameModel::Quaffle)){
+                    return request::DeltaRequest{types::DeltaType::QUAFFLE_THROW, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
+                                                 shot->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                } else if(INSTANCE_OF(shot->getBall(), const gameModel::Bludger)){
+                    return request::DeltaRequest{types::DeltaType::BLUDGER_BEATING, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
+                                                 shot->getTarget().y, actionState.id, shot->getBall()->getId(), std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                } else {
+                    throw std::runtime_error("Invalid shot was calculated");
+                }
+            } else {
+                return request::DeltaRequest{types::DeltaType::WREST_QUAFFLE, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+                                             actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+            }
+        }
+    }
+
+
+
     template<typename T>
     bool SearchNode<T>::operator==(const SearchNode<T> &other) const {
         return this->state == other.state;
