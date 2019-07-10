@@ -18,6 +18,7 @@
 #include <SopraMessages/DeltaRequest.hpp>
 #include <unordered_set>
 #include <SopraMessages/json.hpp>
+#include <iostream>
 
 namespace aiTools{
     constexpr auto minShotSuccessProb = 0.2;
@@ -84,13 +85,14 @@ namespace aiTools{
 
     template <typename EvalFun>
     auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
-                         double beta, int maxDepth, const EvalFun &evalFun, const bool &abort) -> std::pair<std::shared_ptr<gameController::Action>, double> {
+                         double beta, int maxDepth, const EvalFun &evalFun, const bool &abort) -> std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
         std::vector<std::shared_ptr<gameController::Action>> allActions;
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
             auto actionType = gameController::getPossibleBallActionType(currentPlayer, state.env);
             if(!actionType.has_value()){
-                throw std::runtime_error("No action possible");
+                std::cerr << "-------No action possible-------" << std::endl;
+                return std::nullopt;
             }
 
             if(*actionType == gameController::ActionType::Throw){
@@ -114,11 +116,17 @@ namespace aiTools{
             }
         }
 
+
         double minMaxVal = std::numeric_limits<double>::infinity();
         std::optional<std::shared_ptr<gameController::Action>> minMaxAction;
         bool maxSearch = gameLogic::conversions::idToSide(actionState.id) == mySide;
         if(maxSearch){
             minMaxVal *= -1;
+        }
+
+        if(allActions.empty()){
+            std::cerr << "---------Action list is empty. Depth: " + std::to_string(maxDepth) << std::endl;
+            return std::nullopt;
         }
 
         for(const auto &action : allActions){
@@ -130,16 +138,21 @@ namespace aiTools{
                 newState.goalScoredThisRound = state.env->team1->score != newState.env->team1->score || state.env->team2->score != newState.env->team2->score;
                 auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
                 if(abort || maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
-                    return {action, evalFun(newState)};
+                    return std::make_pair(action, evalFun(newState));
                 }
 
                 double currentOutcomeExpectedValue = 0;
                 auto nextActors = computeNextActionStates(newState, actionState);
                 for(const auto &nextActor : nextActors){
-                    currentOutcomeExpectedValue += alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort).second;
+                    auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort);
+                    if(!tmp.has_value()){
+                        return std::make_pair(action, evalFun(newState));
+                    }
+
+                    currentOutcomeExpectedValue += tmp->second;
                     //Bedingung kann hier zutreffen, da abort von außen verändert werden kann
                     if(abort){
-                        return {action, evalFun(newState)};
+                        return std::make_pair(action, evalFun(newState));
                     }
                 }
 
@@ -154,6 +167,11 @@ namespace aiTools{
                 }
 
                 if(expectedValue >= beta){
+                    if(!minMaxAction.has_value()){
+                        std::cerr << "----------error during pruning in max, no value. Depth: " + std::to_string(maxDepth) << std::endl;
+                        return std::nullopt;
+                    }
+
                     return std::make_pair(minMaxAction.value(), minMaxVal);
                 }
 
@@ -166,11 +184,21 @@ namespace aiTools{
                 }
 
                 if(expectedValue <= alpha){
+                    if(!minMaxAction.has_value()){
+                        std::cerr << "----------error during pruning in min, no value. Depth: " + std::to_string(maxDepth) << std::endl;
+                        return std::nullopt;
+                    }
+
                     return std::make_pair(minMaxAction.value(), minMaxVal);
                 }
 
                 beta = std::min(beta, expectedValue);
             }
+        }
+
+        if(!minMaxAction.has_value()){
+            std::cerr << "----------no value after all actions. Depth: " + std::to_string(maxDepth) << std::endl;
+            return std::nullopt;
         }
 
         return std::make_pair(minMaxAction.value(), minMaxVal);
@@ -179,16 +207,19 @@ namespace aiTools{
     template <typename EvalFun>
     auto computeBestActionAlphaBeta(const State &state, const EvalFun &evalFun, const ActionState &actionState, int maxDepth, const bool &abort){
         using namespace communication::messages;
-        auto [bestAction, bestScore] = alphaBetaSearch(state, actionState, gameLogic::conversions::idToSide(actionState.id),
+        auto res = alphaBetaSearch(state, actionState, gameLogic::conversions::idToSide(actionState.id),
                 -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), maxDepth, evalFun, abort);
+        if(!res.has_value()){
+            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+        }
+
+        auto [bestAction, bestScore] = *res;
 
         if(bestScore > evalFun(state)){
-            return request::DeltaRequest{types::DeltaType::MOVE, std::nullopt, std::nullopt, std::nullopt, bestAction->getTarget().x,
-                                         bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
-        } else {
             if(INSTANCE_OF(bestAction, gameController::Move)){
-                return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                             std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                return request::DeltaRequest{types::DeltaType::MOVE, std::nullopt, std::nullopt, std::nullopt, bestAction->getTarget().x,
+                                             bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
             } else if(INSTANCE_OF(bestAction, gameController::Shot)){
                 auto shot = std::dynamic_pointer_cast<gameController::Shot>(bestAction);
                 if(INSTANCE_OF(shot->getBall(), const gameModel::Quaffle)){
@@ -204,6 +235,9 @@ namespace aiTools{
                 return request::DeltaRequest{types::DeltaType::WREST_QUAFFLE, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
                                              actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
             }
+        } else {
+            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
         }
     }
 

@@ -214,15 +214,11 @@ namespace aiTools{
                                  const ActionState &actionState) -> std::vector<std::pair<State, ActionState>> {
         using namespace gameLogic::conversions;
         auto currentPlayer = state.env->getPlayerById(actionState.id);
-        if(currentPlayer->isFined || currentPlayer->knockedOut){
-            throw std::runtime_error("Player is incapacitated");
-        }
-
         std::vector<std::pair<State, ActionState>> ret;
-        if(actionState.turnState == ActionState::TurnState::FirstMove &&
+        if(!currentPlayer->isFined && !currentPlayer->knockedOut && actionState.turnState == ActionState::TurnState::FirstMove &&
             state.env->config.getExtraTurnProb(state.env->getPlayerById(actionState.id)->broom) > 0.5){
             ret.emplace_back(state.clone(), ActionState{actionState.id, ActionState::TurnState::SecondMove});
-        } else if(actionState.turnState == ActionState::TurnState::Action ||
+        } else if(currentPlayer->isFined || currentPlayer->knockedOut || actionState.turnState == ActionState::TurnState::Action ||
             !gameController::playerCanPerformAction(state.env->getPlayerById(actionState.id), state.env)){
             std::vector<communication::messages::types::EntityId> nextPlayers;
             auto &usedPlayers = idToSide(actionState.id) == gameModel::TeamSide::LEFT ? state.playersUsedRight : state.playersUsedLeft;
