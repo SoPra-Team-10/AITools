@@ -19,11 +19,16 @@
 #include <unordered_set>
 #include <SopraMessages/json.hpp>
 #include <iostream>
+#include <atomic>
 
 namespace aiTools{
-    constexpr auto minShotSuccessProb = 0.2;
+    constexpr auto MIN_SHOT_SUCCESS_PROB = 0.2;
     static constexpr int FIELD_WIDTH = 16;
+    constexpr auto MIN_SEARCH_DEPTH = 2;
 
+    /**
+     * Represents a complete state in the game including positions of objects and other useful data
+     */
     class State {
     public:
         static constexpr auto FEATURE_VEC_LEN = 122;
@@ -55,6 +60,9 @@ namespace aiTools{
     void to_json(nlohmann::json &j, const State &state);
     void from_json(const nlohmann::json &j, State &state);
 
+    /**
+     * Represents a generic node in a search problem
+     */
     template <typename T>
     class SearchNode {
     public:
@@ -67,7 +75,9 @@ namespace aiTools{
         bool operator==(const SearchNode<T> &other) const;
     };
 
-
+    /**
+     * Represents the type of action an entity has to take
+     */
     class ActionState{
     public:
         enum class TurnState{
@@ -81,11 +91,30 @@ namespace aiTools{
         TurnState turnState;
     };
 
+    /**
+     * Computes all possible ActionStates immediatly follwoing a given ActionState
+     * @param state the current game state
+     * @param actionState the last ActionState
+     * @return List of possible ActionStates following the given ActionState along with the corresponding game state
+     */
     auto computeNextActionStates(const State &state, const ActionState &actionState) -> std::vector<std::pair<State, ActionState>>;
 
+    /**
+     * Computes the best Action to respond to the given ActionState using alpha-beta-search.
+     * @tparam EvalFun Type of evaluation function used for evaluating game states. Must return comparable
+     * @param state The current game state
+     * @param actionState the current ActionState
+     * @param mySide the TeamSide the ai plays on
+     * @param alpha alpha value (initially -infinity)
+     * @param beta beta value (initially infinity)
+     * @param maxDepth maximum search depth
+     * @param evalFun evaluation function used to evaluate a State
+     * @param abort atomic bool to stop computation if set to true
+     * @return Pair of the best possible Action and its corresponding utility value or nothing if errors occured
+     */
     template <typename EvalFun>
     auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
-                         double beta, int maxDepth, const EvalFun &evalFun, const bool &abort) -> std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
+                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort) -> std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
         std::vector<std::shared_ptr<gameController::Action>> allActions;
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
@@ -96,7 +125,7 @@ namespace aiTools{
             }
 
             if(*actionType == gameController::ActionType::Throw){
-                auto tmp = gameController::getAllPossibleShots(currentPlayer, state.env, minShotSuccessProb);
+                auto tmp = gameController::getAllPossibleShots(currentPlayer, state.env, MIN_SHOT_SUCCESS_PROB);
                 for(const auto &a : tmp){
                     allActions.emplace_back(std::make_shared<gameController::Shot>(a));
                 }
@@ -204,40 +233,82 @@ namespace aiTools{
         return std::make_pair(minMaxAction.value(), minMaxVal);
     }
 
+    /**
+     * Computes a DeltaRequest containing the best action possible in a current state using alpha beta search as iterative deepening search.
+     * @tparam EvalFun Type of evaluation function used for evaluating game states. Must return comparable
+     * @param state current game state
+     * @param evalFun evaluation function used to evaluate a State
+     * @param actionState current action state defining id and type of action to take
+     * @param abort atomic bool flag to abort computation
+     * @return DeltaRequest containing the desired action
+     */
     template <typename EvalFun>
-    auto computeBestActionAlphaBeta(const State &state, const EvalFun &evalFun, const ActionState &actionState, int maxDepth, const bool &abort){
+    auto computeBestActionAlphaBetaID(const State &state, const EvalFun &evalFun, const ActionState &actionState, const std::atomic_bool &abort) ->
+        communication::messages::request::DeltaRequest {
+        using namespace communication::messages;
+        int maxDepth = MIN_SEARCH_DEPTH;
+        std::optional<std::pair<request::DeltaRequest, double>> ret;
+        while (!abort){
+            auto tmp = computeBestActionAlphaBeta(state, evalFun, actionState, maxDepth++, abort);
+            if(!ret.has_value() || tmp.second > ret->second){
+                ret = tmp;
+            }
+        }
+
+        if(ret.has_value()){
+            return ret->first;
+        }
+
+        return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                     std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+    }
+
+    /**
+     * Computes a DeltaRequest containing the best action possible in a current state using alpha beta search.
+     * @tparam EvalFun Type of evaluation function used for evaluating game states. Must return comparable
+     * @param state current game state
+     * @param evalFun evaluation function used to evaluate a State
+     * @param actionState current action state defining id and type of action to take
+     * @param maxDepth maximum search depth
+     * @param abort atomic bool flag to abort computation
+     * @return pair containing DeltaRequest and corresponding utility value
+     */
+    template <typename EvalFun>
+    auto computeBestActionAlphaBeta(const State &state, const EvalFun &evalFun, const ActionState &actionState, int maxDepth, const std::atomic_bool &abort) ->
+        std::pair<communication::messages::request::DeltaRequest, double> {
+        double currentScore = evalFun(state);
         using namespace communication::messages;
         auto res = alphaBetaSearch(state, actionState, gameLogic::conversions::idToSide(actionState.id),
                 -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), maxDepth, evalFun, abort);
         if(!res.has_value()){
-            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+            return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore};
         }
 
         auto [bestAction, bestScore] = *res;
 
-        if(bestScore > evalFun(state)){
+        if(bestScore > currentScore){
             if(INSTANCE_OF(bestAction, gameController::Move)){
-                return request::DeltaRequest{types::DeltaType::MOVE, std::nullopt, std::nullopt, std::nullopt, bestAction->getTarget().x,
-                                             bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                return {request::DeltaRequest{types::DeltaType::MOVE, std::nullopt, std::nullopt, std::nullopt, bestAction->getTarget().x,
+                                             bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
             } else if(INSTANCE_OF(bestAction, gameController::Shot)){
                 auto shot = std::dynamic_pointer_cast<gameController::Shot>(bestAction);
                 if(INSTANCE_OF(shot->getBall(), const gameModel::Quaffle)){
-                    return request::DeltaRequest{types::DeltaType::QUAFFLE_THROW, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
-                                                 shot->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                    return {request::DeltaRequest{types::DeltaType::QUAFFLE_THROW, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
+                                                 shot->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
                 } else if(INSTANCE_OF(shot->getBall(), const gameModel::Bludger)){
-                    return request::DeltaRequest{types::DeltaType::BLUDGER_BEATING, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
-                                                 shot->getTarget().y, actionState.id, shot->getBall()->getId(), std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                    return {request::DeltaRequest{types::DeltaType::BLUDGER_BEATING, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
+                                                 shot->getTarget().y, actionState.id, shot->getBall()->getId(), std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
                 } else {
                     throw std::runtime_error("Invalid shot was calculated");
                 }
             } else {
-                return request::DeltaRequest{types::DeltaType::WREST_QUAFFLE, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
-                                             actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+                return {request::DeltaRequest{types::DeltaType::WREST_QUAFFLE, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
+                                             actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
             }
         } else {
-            return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+            return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore};
         }
     }
 
@@ -404,7 +475,7 @@ namespace aiTools{
         communication::messages::request::DeltaRequest{
         using namespace communication::messages;
         auto player = state.env->getPlayerById(id);
-        auto shots = gameController::getAllPossibleShots(player, state.env, minShotSuccessProb);
+        auto shots = gameController::getAllPossibleShots(player, state.env, MIN_SHOT_SUCCESS_PROB);
         if(shots.empty()){
             //No shot with decent success probability possible -> skip turn
             return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, id,
