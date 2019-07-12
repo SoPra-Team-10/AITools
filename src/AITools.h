@@ -127,7 +127,7 @@ namespace aiTools{
             }
 
             if(*actionType == gameController::ActionType::Throw){
-                auto tmp = gameController::getAllPossibleShots(currentPlayer, state.env, MIN_SHOT_SUCCESS_PROB);
+                auto tmp = gameController::getAllConstrainedShots(currentPlayer, state.env);
                 for(const auto &a : tmp){
                     allActions.emplace_back(std::make_shared<gameController::Shot>(a));
                 }
