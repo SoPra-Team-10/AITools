@@ -1,5 +1,4 @@
 var searchData=
 [
-  ['searchnode',['SearchNode',['../classai_tools_1_1_search_node.html',1,'aiTools']]],
-  ['state',['State',['../classai_tools_1_1_state.html',1,'aiTools']]]
+  ['clone',['clone',['../classai_tools_1_1_state.html#a623c6776a1813dc0671b54333a5da928',1,'aiTools::State']]]
 ];
