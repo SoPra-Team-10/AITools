@@ -267,3 +267,23 @@ TEST(ai_test, serialize_and_deserialize){
     EXPECT_EQ(state.playersUsedLeft, newState.playersUsedLeft);
 }
 
+//--------------------------------------------nextActionState-----------------------------------------------------------
+TEST(ai_test, compute_Next_action_state){
+    using B = communication::messages::types::Broom;
+    std::map<B, double> brooms;
+    brooms.emplace(B::TINDERBLAST, 0.5);
+    brooms.emplace(B::CLEANSWEEP11, 0.6);
+    brooms.emplace(B::COMET260, 0.7);
+    brooms.emplace(B::NIMBUS2001, 0.8);
+    brooms.emplace(B::FIREBOLT, 0.9);
+    auto env = setup::createEnv({0, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1}, brooms});
+    aiTools::State state;
+    state.env = env;
+    env->quaffle->position = env->team1->chasers[0]->position;
+    auto res = aiTools::computeNextActionStates(state, aiTools::ActionState(communication::messages::types::EntityId::LEFT_CHASER1,
+            aiTools::ActionState::TurnState::FirstMove));
+    while (!res.empty()){
+        res = aiTools::computeNextActionStates(res[0].first, res[0].second);
+    }
+}
+
