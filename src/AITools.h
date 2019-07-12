@@ -127,7 +127,7 @@ namespace aiTools{
             }
 
             if(*actionType == gameController::ActionType::Throw){
-                auto tmp = gameController::getAllConstrainedShots(currentPlayer, state.env);
+                auto tmp = gameController::getAllPossibleShots(currentPlayer, state.env, 0);
                 for(const auto &a : tmp){
                     allActions.emplace_back(std::make_shared<gameController::Shot>(a));
                 }
@@ -256,14 +256,18 @@ namespace aiTools{
         using namespace communication::messages;
         int maxDepth = minDepth;
         std::optional<request::DeltaRequest> bestAction;
-        double bestScore = 0;
+        double bestScore = -std::numeric_limits<double>::infinity();
         unsigned long totalExpansions = 0;
         while (!abort){
             auto [action, score, expansions] = computeBestActionAlphaBeta(state, evalFun, actionState, maxDepth++, abort);
-            if(!bestAction.has_value() || score > bestScore){
+            if(!abort || score > bestScore){
                 bestAction.emplace(action);
                 bestScore = score;
-                totalExpansions += expansions;
+            }
+
+            totalExpansions += expansions;
+            if(maxDepth > 42){ //3 Aktionen pro Spieler, 14 Spieler (nur zufällig 42)
+                break;
             }
         }
 
