@@ -173,7 +173,7 @@ namespace aiTools{
     }
 
     void mirrorPos(gameModel::Position &pos) {
-        pos.x = FIELD_WIDTH - pos.x;
+        pos.x = FIELD_WIDTH - 1 - pos.x;
     }
 
     int maybeMirrorX(const int &x, bool necessary) {
