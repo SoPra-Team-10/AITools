@@ -178,7 +178,7 @@ namespace aiTools{
 
     int maybeMirrorX(const int &x, bool necessary) {
         if(necessary){
-            return FIELD_WIDTH - x;
+            return FIELD_WIDTH - 1 - x;
         } else {
             return x;
         }
@@ -215,11 +215,13 @@ namespace aiTools{
         using namespace gameLogic::conversions;
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         std::vector<std::pair<State, ActionState>> ret;
-        if(!currentPlayer->isFined && !currentPlayer->knockedOut && actionState.turnState == ActionState::TurnState::FirstMove &&
-            state.env->config.getExtraTurnProb(state.env->getPlayerById(actionState.id)->broom) > 0.5){
+        bool secondMoveProbable = !currentPlayer->isFined && !currentPlayer->knockedOut && actionState.turnState == ActionState::TurnState::FirstMove &&
+            state.env->config.getExtraTurnProb(state.env->getPlayerById(actionState.id)->broom) > 0.5;
+        bool newPlayerNeeded = currentPlayer->isFined || currentPlayer->knockedOut || actionState.turnState == ActionState::TurnState::Action ||
+            !gameController::playerCanPerformAction(state.env->getPlayerById(actionState.id), state.env);
+        if(secondMoveProbable){
             ret.emplace_back(state.clone(), ActionState{actionState.id, ActionState::TurnState::SecondMove});
-        } else if(currentPlayer->isFined || currentPlayer->knockedOut || actionState.turnState == ActionState::TurnState::Action ||
-            !gameController::playerCanPerformAction(state.env->getPlayerById(actionState.id), state.env)){
+        } else if(newPlayerNeeded){
             std::vector<communication::messages::types::EntityId> nextPlayers;
             auto &usedPlayers = idToSide(actionState.id) == gameModel::TeamSide::LEFT ? state.playersUsedRight : state.playersUsedLeft;
             ret.reserve(7 - usedPlayers.size());

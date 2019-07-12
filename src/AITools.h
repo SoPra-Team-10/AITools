@@ -23,7 +23,7 @@
 
 namespace aiTools{
     constexpr auto MIN_SHOT_SUCCESS_PROB = 0.2;
-    static constexpr int FIELD_WIDTH = 16;
+    static constexpr int FIELD_WIDTH = 17;
 
     /**
      * Represents a complete state in the game including positions of objects and other useful data
