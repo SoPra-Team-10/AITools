@@ -24,7 +24,6 @@
 namespace aiTools{
     constexpr auto MIN_SHOT_SUCCESS_PROB = 0.2;
     static constexpr int FIELD_WIDTH = 16;
-    constexpr auto MIN_SEARCH_DEPTH = 2;
 
     /**
      * Represents a complete state in the game including positions of objects and other useful data
@@ -110,11 +109,14 @@ namespace aiTools{
      * @param maxDepth maximum search depth
      * @param evalFun evaluation function used to evaluate a State
      * @param abort atomic bool to stop computation if set to true
+     * @param expansions current number of expansions during the search (initially 0)
      * @return Pair of the best possible Action and its corresponding utility value or nothing if errors occured
      */
     template <typename EvalFun>
     auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
-                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort) -> std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
+                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions) ->
+                         std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
+        expansions++;
         std::vector<std::shared_ptr<gameController::Action>> allActions;
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
@@ -173,7 +175,7 @@ namespace aiTools{
                 double currentOutcomeExpectedValue = 0;
                 auto nextActors = computeNextActionStates(newState, actionState);
                 for(const auto &nextActor : nextActors){
-                    auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort);
+                    auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort, expansions);
                     if(!tmp.has_value()){
                         return std::make_pair(action, evalFun(newState));
                     }
@@ -240,27 +242,32 @@ namespace aiTools{
      * @param evalFun evaluation function used to evaluate a State
      * @param actionState current action state defining id and type of action to take
      * @param abort atomic bool flag to abort computation
-     * @return DeltaRequest containing the desired action
+     * @param minDepth minimal search depth
+     * @return DeltaRequest containing the desired action, the search depth on which the result was aquired, total number of states explored
      */
     template <typename EvalFun>
-    auto computeBestActionAlphaBetaID(const State &state, const EvalFun &evalFun, const ActionState &actionState, const std::atomic_bool &abort) ->
-        communication::messages::request::DeltaRequest {
+    auto computeBestActionAlphaBetaID(const State &state, const EvalFun &evalFun, const ActionState &actionState, const std::atomic_bool &abort, int minDepth) ->
+        std::tuple<communication::messages::request::DeltaRequest, int, unsigned long> {
         using namespace communication::messages;
-        int maxDepth = MIN_SEARCH_DEPTH;
-        std::optional<std::pair<request::DeltaRequest, double>> ret;
+        int maxDepth = minDepth;
+        std::optional<request::DeltaRequest> bestAction;
+        double bestScore = 0;
+        unsigned long totalExpansions = 0;
         while (!abort){
-            auto tmp = computeBestActionAlphaBeta(state, evalFun, actionState, maxDepth++, abort);
-            if(!ret.has_value() || tmp.second > ret->second){
-                ret = tmp;
+            auto [action, score, expansions] = computeBestActionAlphaBeta(state, evalFun, actionState, maxDepth++, abort);
+            if(!bestAction.has_value() || score > bestScore){
+                bestAction.emplace(action);
+                bestScore = score;
+                totalExpansions += expansions;
             }
         }
 
-        if(ret.has_value()){
-            return ret->first;
+        if(bestAction.has_value()){
+            return {*bestAction, maxDepth, totalExpansions};
         }
 
-        return request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                     std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt};
+        return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
+                                     std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, maxDepth, totalExpansions};
     }
 
     /**
@@ -275,14 +282,15 @@ namespace aiTools{
      */
     template <typename EvalFun>
     auto computeBestActionAlphaBeta(const State &state, const EvalFun &evalFun, const ActionState &actionState, int maxDepth, const std::atomic_bool &abort) ->
-        std::pair<communication::messages::request::DeltaRequest, double> {
+        std::tuple<communication::messages::request::DeltaRequest, double, unsigned long> {
         double currentScore = evalFun(state);
         using namespace communication::messages;
+        unsigned long expansions = 0;
         auto res = alphaBetaSearch(state, actionState, gameLogic::conversions::idToSide(actionState.id),
-                -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), maxDepth, evalFun, abort);
+                -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), maxDepth, evalFun, abort, expansions);
         if(!res.has_value()){
             return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore};
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore, expansions};
         }
 
         auto [bestAction, bestScore] = *res;
@@ -290,25 +298,25 @@ namespace aiTools{
         if(bestScore > currentScore){
             if(INSTANCE_OF(bestAction, gameController::Move)){
                 return {request::DeltaRequest{types::DeltaType::MOVE, std::nullopt, std::nullopt, std::nullopt, bestAction->getTarget().x,
-                                             bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
+                                             bestAction->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore, expansions};
             } else if(INSTANCE_OF(bestAction, gameController::Shot)){
                 auto shot = std::dynamic_pointer_cast<gameController::Shot>(bestAction);
                 if(INSTANCE_OF(shot->getBall(), const gameModel::Quaffle)){
                     return {request::DeltaRequest{types::DeltaType::QUAFFLE_THROW, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
-                                                 shot->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
+                                                 shot->getTarget().y, actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore, expansions};
                 } else if(INSTANCE_OF(shot->getBall(), const gameModel::Bludger)){
                     return {request::DeltaRequest{types::DeltaType::BLUDGER_BEATING, std::nullopt, std::nullopt, std::nullopt, shot->getTarget().x,
-                                                 shot->getTarget().y, actionState.id, shot->getBall()->getId(), std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
+                                                 shot->getTarget().y, actionState.id, shot->getBall()->getId(), std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore, expansions};
                 } else {
                     throw std::runtime_error("Invalid shot was calculated");
                 }
             } else {
                 return {request::DeltaRequest{types::DeltaType::WREST_QUAFFLE, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
-                                             actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore};
+                                             actionState.id, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, bestScore, expansions};
             }
         } else {
             return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore};
+                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore, expansions};
         }
     }
 
