@@ -187,7 +187,12 @@ namespace aiTools{
                     }
                 }
 
-                currentOutcomeExpectedValue /= nextActors.size();
+                if(nextActors.empty()){
+                    currentOutcomeExpectedValue = evalFun(newState);
+                } else {
+                    currentOutcomeExpectedValue /= nextActors.size();
+                }
+
                 expectedValue += currentOutcomeExpectedValue * outcome.second;
             }
 
