@@ -4,7 +4,7 @@
 <meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.8.6"/>
-<title>AITools: Data Fields - Functions</title>
+<title>AITools: aiTools::ActionState Class Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -61,16 +61,9 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
     <ul class="tablist">
       <li><a href="annotated.html"><span>Data&#160;Structures</span></a></li>
       <li><a href="classes.html"><span>Data&#160;Structure&#160;Index</span></a></li>
-      <li class="current"><a href="functions.html"><span>Data&#160;Fields</span></a></li>
+      <li><a href="functions.html"><span>Data&#160;Fields</span></a></li>
     </ul>
   </div>
-  <div id="navrow3" class="tabs2">
-    <ul class="tablist">
-      <li><a href="functions.html"><span>All</span></a></li>
-      <li class="current"><a href="functions_func.html"><span>Functions</span></a></li>
-    </ul>
-  </div>
-</div><!-- top -->
 <!-- window showing the filter options -->
 <div id="MSearchSelectWindow"
      onmouseover="return searchBox.OnSearchSelectShow()"
@@ -85,14 +78,51 @@ var searchBox = new SearchBox("searchBox", "search",false,'Search');
 </iframe>
 </div>
 
+<div id="nav-path" class="navpath">
+  <ul>
+<li class="navelem"><b>aiTools</b></li><li class="navelem"><a class="el" href="classai_tools_1_1_action_state.html">ActionState</a></li>  </ul>
+</div>
+</div><!-- top -->
+<div class="header">
+  <div class="summary">
+<a href="#pub-types">Public Types</a> &#124;
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Data Fields</a>  </div>
+  <div class="headertitle">
+<div class="title">aiTools::ActionState Class Reference</div>  </div>
+</div><!--header-->
 <div class="contents">
-&#160;<ul>
-<li>clone()
-: <a class="el" href="classai_tools_1_1_state.html#a623c6776a1813dc0671b54333a5da928">aiTools::State</a>
-</li>
-<li>getFeatureVec()
-: <a class="el" href="classai_tools_1_1_state.html#a15a4d0d31ee9ec5fe9012b1edaaa36de">aiTools::State</a>
-</li>
+
+<p><code>#include &lt;<a class="el" href="_a_i_tools_8h_source.html">AITools.h</a>&gt;</code></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-types"></a>
+Public Types</h2></td></tr>
+<tr class="memitem:a716a8bcc51a775ebb0712d1de5d98cab"><td class="memItemLeft" align="right" valign="top">enum &#160;</td><td class="memItemRight" valign="bottom"><b>TurnState</b> { <b>FirstMove</b>, 
+<b>SecondMove</b>, 
+<b>Action</b>
+ }</td></tr>
+<tr class="separator:a716a8bcc51a775ebb0712d1de5d98cab"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a9c099e3ecdba753b524e142895655d47"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a9c099e3ecdba753b524e142895655d47"></a>
+&#160;</td><td class="memItemRight" valign="bottom"><b>ActionState</b> (communication::messages::types::EntityId id, TurnState turnState)</td></tr>
+<tr class="separator:a9c099e3ecdba753b524e142895655d47"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Data Fields</h2></td></tr>
+<tr class="memitem:a9ef9b6ca829ceea1a4d57a81e3332ee1"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a9ef9b6ca829ceea1a4d57a81e3332ee1"></a>
+communication::messages::types::EntityId&#160;</td><td class="memItemRight" valign="bottom"><b>id</b></td></tr>
+<tr class="separator:a9ef9b6ca829ceea1a4d57a81e3332ee1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2b531527caddef2a836813ba5d0365de"><td class="memItemLeft" align="right" valign="top"><a class="anchor" id="a2b531527caddef2a836813ba5d0365de"></a>
+TurnState&#160;</td><td class="memItemRight" valign="bottom"><b>turnState</b></td></tr>
+<tr class="separator:a2b531527caddef2a836813ba5d0365de"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><p>Represents the type of action an entity has to take </p>
+</div><hr/>The documentation for this class was generated from the following files:<ul>
+<li>/home/travis/build/SoPra-Team-10/AITools/src/<a class="el" href="_a_i_tools_8h_source.html">AITools.h</a></li>
+<li>/home/travis/build/SoPra-Team-10/AITools/src/AITools.cpp</li>
 </ul>
 </div><!-- contents -->
 <!-- start footer part -->
