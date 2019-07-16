@@ -117,7 +117,14 @@ namespace aiTools{
                          double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions) ->
                          std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
         expansions++;
-        std::vector<std::shared_ptr<gameController::Action>> allActions;
+        std::vector<gameController::Action*> allActions;
+
+        // These variables are kept here because allActions keeps pointers on the elements so they need to have lifetime
+        // for the scope of the whole function
+        std::vector<gameController::Shot> possibleShots;
+        gameController::WrestQuaffle wrestQuaffle;
+        std::vector<gameController::Move> possibleMoves;
+
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
             auto actionType = gameController::getPossibleBallActionType(currentPlayer, state.env);
@@ -127,29 +134,31 @@ namespace aiTools{
             }
 
             if(*actionType == gameController::ActionType::Throw){
-                auto tmp = gameController::getAllPossibleShots(currentPlayer, state.env, 0);
-                for(const auto &a : tmp){
-                    allActions.emplace_back(std::make_shared<gameController::Shot>(a));
+                possibleShots = gameController::getAllPossibleShots(currentPlayer, state.env, 0);
+                allActions.reserve(possibleShots.size());
+                for(const auto &a : possibleShots){
+                    allActions.emplace_back(&a);
                 }
             } else {
                 auto chaser = std::dynamic_pointer_cast<gameModel::Chaser>(currentPlayer);
                 if(!chaser){
                     throw std::runtime_error("Player is no chaser");
                 }
+                wrestQuaffle = gameController::WrestQuaffle(state.env, chaser, state.env->quaffle->position);
 
-                allActions.emplace_back(std::make_shared<gameController::WrestQuaffle>(gameController::WrestQuaffle(state.env, chaser, state.env->quaffle->position)));
+                allActions.emplace_back(&wrestQuaffle);
             }
         } else {
-            auto tmp = gameController::getAllPossibleMoves(currentPlayer, state.env);
-            allActions.reserve(tmp.size());
-            for(const auto &a : tmp){
-                allActions.emplace_back(std::make_shared<gameController::Move>(a));
+            possibleMoves = gameController::getAllPossibleMoves(currentPlayer, state.env);
+            allActions.reserve(possibleMoves.size());
+            for(const auto &a : possibleMoves){
+                allActions.emplace_back(&a);
             }
         }
 
 
         double minMaxVal = std::numeric_limits<double>::infinity();
-        std::optional<std::shared_ptr<gameController::Action>> minMaxAction;
+        std::optional<gameController::Action*> minMaxAction;
         bool maxSearch = gameLogic::conversions::idToSide(actionState.id) == mySide;
         if(maxSearch){
             minMaxVal *= -1;
@@ -169,7 +178,7 @@ namespace aiTools{
                 newState.goalScoredThisRound = state.env->team1->score != newState.env->team1->score || state.env->team2->score != newState.env->team2->score;
                 auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
                 if(abort || maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
-                    return std::make_pair(action, evalFun(newState));
+                    return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
                 }
 
                 double currentOutcomeExpectedValue = 0;
@@ -177,13 +186,13 @@ namespace aiTools{
                 for(const auto &nextActor : nextActors){
                     auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort, expansions);
                     if(!tmp.has_value()){
-                        return std::make_pair(action, evalFun(newState));
+                        return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
                     }
 
                     currentOutcomeExpectedValue += tmp->second;
                     //Bedingung kann hier zutreffen, da abort von außen verändert werden kann
                     if(abort){
-                        return std::make_pair(action, evalFun(newState));
+                        return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
                     }
                 }
 
@@ -208,7 +217,7 @@ namespace aiTools{
                         return std::nullopt;
                     }
 
-                    return std::make_pair(minMaxAction.value(), minMaxVal);
+                    return std::make_pair(std::make_shared<gameController::Action>(*minMaxAction.value()), minMaxVal);
                 }
 
                 alpha = std::max(alpha, expectedValue);
@@ -225,7 +234,7 @@ namespace aiTools{
                         return std::nullopt;
                     }
 
-                    return std::make_pair(minMaxAction.value(), minMaxVal);
+                    return std::make_pair(std::make_shared<gameController::Action>(*minMaxAction.value()), minMaxVal);
                 }
 
                 beta = std::min(beta, expectedValue);
@@ -237,7 +246,7 @@ namespace aiTools{
             return std::nullopt;
         }
 
-        return std::make_pair(minMaxAction.value(), minMaxVal);
+        return std::make_pair(std::make_shared<gameController::Action>(*minMaxAction.value()), minMaxVal);
     }
 
     /**
