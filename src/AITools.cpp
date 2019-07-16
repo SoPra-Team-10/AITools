@@ -18,7 +18,7 @@ namespace aiTools{
             std::vector<aiTools::SearchNode<gameModel::Position>> path;
             path.reserve(8);
             auto parent = std::make_shared<aiTools::SearchNode<gameModel::Position>>(node);
-            for (const auto &pos : env->getAllLegalCellsAround(node.state, env->team1->hasMember(player))) {
+            for (const auto &pos : env->getAllLegalCellsAround(node.state, env->getTeam(gameModel::TeamSide::LEFT)->hasMember(player))) {
                 path.emplace_back(pos, parent, node.pathCost + 1);
             }
 
