@@ -18,6 +18,7 @@
 #include <SopraMessages/DeltaRequest.hpp>
 #include <unordered_set>
 #include <SopraMessages/json.hpp>
+#include <SopraUtil/AtDestruction.h>
 #include <iostream>
 #include <atomic>
 
@@ -173,9 +174,18 @@ namespace aiTools{
             double expectedValue = 0;
             for(const auto &outcome : action->executeAll()){
                 const auto &currentEnv = outcome.first;
-                auto newState = state.clone();
-                newState.env = outcome.first;
-                newState.goalScoredThisRound = state.env->team1->score != newState.env->team1->score || state.env->team2->score != newState.env->team2->score;
+
+                const auto &oldEnv = state.env;
+                const auto oldGoalScoredThisRound = state.goalScoredThisRound;
+
+                util::AtDestruction<State> newState{[&oldEnv, &oldGoalScoredThisRound, &newState]() {
+                    newState.t.env = oldEnv;
+                    newState.t.goalScoredThisRound = oldGoalScoredThisRound;
+                },state};
+
+                newState.t.env = outcome.first;
+                newState.t.goalScoredThisRound = state.env->team1->score != newState.t.env->team1->score || state.env->team2->score != newState.t.env->team2->score;
+
                 auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
                 if(abort || maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
                     return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
