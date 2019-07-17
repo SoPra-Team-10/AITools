@@ -287,12 +287,7 @@ namespace aiTools{
         unsigned long expansions = 0;
         auto res = alphaBetaSearch(state, actionState, gameLogic::conversions::idToSide(actionState.id),
                 -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), maxDepth, evalFun, abort, expansions);
-        if(!res.has_value()){
-            return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                         std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, currentScore, expansions};
-        }
-
-        auto [bestAction, bestScore] = *res;
+        auto [bestAction, bestScore] = res;
 
         if(bestScore > currentScore){
             if(INSTANCE_OF(bestAction, gameController::Move)){
