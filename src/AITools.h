@@ -115,8 +115,9 @@ namespace aiTools{
      */
     template <typename EvalFun>
     auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
-                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions) ->
-                         std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
+                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions,
+                         bool isTopLevel = false) ->
+                         std::pair<std::shared_ptr<gameController::Action>, double> {
         expansions++;
         std::vector<const gameController::Action*> allActions;
 
@@ -170,11 +171,6 @@ namespace aiTools{
             minMaxVal *= -1;
         }
 
-        if(allActions.empty()){
-            std::cerr << "---------Action list is empty. Depth: " + std::to_string(maxDepth) << std::endl;
-            return std::nullopt;
-        }
-
         for(const auto &action : allActions){
             double expectedValue = 0;
             for(const auto &outcome : action->executeAll()){
@@ -183,22 +179,21 @@ namespace aiTools{
                 newState.env = outcome.first;
                 newState.goalScoredThisRound = state.env->team1->score != newState.env->team1->score || state.env->team2->score != newState.env->team2->score;
                 auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
-                if(abort || maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
-                    return std::make_pair(makeRawShared(action), evalFun(newState));
+                if(abort || maxDepth == 0 || (currentEnv->snitch->exists && playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
+                    return std::make_pair(makeRawShared(action), evalFun(state));
                 }
 
                 double currentOutcomeExpectedValue = 0;
                 auto nextActors = computeNextActionStates(newState, actionState);
-                for(const auto &nextActor : nextActors){
-                    auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort, expansions);
-                    if(!tmp.has_value()){
-                        return std::make_pair(makeRawShared(action), evalFun(newState));
-                    }
+                //@TODO parallelize
+                for (const auto &nextActor : nextActors) {
+                    auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1,
+                                               evalFun, abort, expansions);
 
-                    currentOutcomeExpectedValue += tmp->second;
+                    currentOutcomeExpectedValue += tmp.second;
                     //Bedingung kann hier zutreffen, da abort von außen verändert werden kann
-                    if(abort){
-                        return std::make_pair(makeRawShared(action), evalFun(newState));
+                    if (abort) {
+                        return std::make_pair(makeRawShared(action), evalFun(state));
                     }
                 }
 
@@ -218,11 +213,6 @@ namespace aiTools{
                 }
 
                 if(expectedValue >= beta){
-                    if(!minMaxAction.has_value()){
-                        std::cerr << "----------error during pruning in max, no value. Depth: " + std::to_string(maxDepth) << std::endl;
-                        return std::nullopt;
-                    }
-
                     return std::make_pair(makeRawShared(minMaxAction.value()), minMaxVal);
                 }
 
@@ -235,21 +225,11 @@ namespace aiTools{
                 }
 
                 if(expectedValue <= alpha){
-                    if(!minMaxAction.has_value()){
-                        std::cerr << "----------error during pruning in min, no value. Depth: " + std::to_string(maxDepth) << std::endl;
-                        return std::nullopt;
-                    }
-
                     return std::make_pair(makeRawShared(minMaxAction.value()), minMaxVal);
                 }
 
                 beta = std::min(beta, expectedValue);
             }
-        }
-
-        if(!minMaxAction.has_value()){
-            std::cerr << "----------no value after all actions. Depth: " + std::to_string(maxDepth) << std::endl;
-            return std::nullopt;
         }
 
         return std::make_pair(makeRawShared(minMaxAction.value()), minMaxVal);
