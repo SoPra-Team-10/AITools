@@ -135,7 +135,7 @@ namespace aiTools{
         if(actionState.turnState == ActionState::TurnState::Action){
             auto actionType = gameController::getPossibleBallActionType(currentPlayer, state.env);
 
-            if(*actionType == gameController::ActionType::Throw){
+            if(actionType.value() == gameController::ActionType::Throw){
                 possibleShots = gameController::getAllPossibleShots(currentPlayer, state.env, 0);
                 allActions.reserve(possibleShots.size());
                 for(const auto &a : possibleShots){
