@@ -115,8 +115,7 @@ namespace aiTools{
      */
     template <typename EvalFun>
     auto alphaBetaSearch(const State &state, const ActionState &actionState, gameModel::TeamSide mySide, double alpha,
-                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions,
-                         bool isTopLevel = false) ->
+                         double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions) ->
                          std::pair<std::shared_ptr<gameController::Action>, double> {
         expansions++;
         std::vector<const gameController::Action*> allActions;
@@ -181,7 +180,6 @@ namespace aiTools{
 
                 double currentOutcomeExpectedValue = 0;
                 auto nextActors = computeNextActionStates(newState, actionState);
-                //@TODO parallelize
                 for (const auto &nextActor : nextActors) {
                     auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1,
                                                evalFun, abort, expansions);
