@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include <SopraMessages/json.hpp>
 #include <SopraUtil/AtDestruction.h>
+#include <SopraUtil/PolymorphicRawMakeShared.h>
 #include <iostream>
 #include <atomic>
 
@@ -118,13 +119,18 @@ namespace aiTools{
                          double beta, int maxDepth, const EvalFun &evalFun, const std::atomic_bool &abort, unsigned long &expansions) ->
                          std::optional<std::pair<std::shared_ptr<gameController::Action>, double>> {
         expansions++;
-        std::vector<gameController::Action*> allActions;
+        std::vector<const gameController::Action*> allActions;
 
         // These variables are kept here because allActions keeps pointers on the elements so they need to have lifetime
         // for the scope of the whole function
         std::vector<gameController::Shot> possibleShots;
         gameController::WrestQuaffle wrestQuaffle;
         std::vector<gameController::Move> possibleMoves;
+
+        auto makeRawShared = [](const gameController::Action *action) {
+            return util::makeSharedFromRaw<gameController::Action, gameController::Shot,
+                    gameController::WrestQuaffle, gameController::Move>(action);
+        };
 
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
@@ -159,7 +165,7 @@ namespace aiTools{
 
 
         double minMaxVal = std::numeric_limits<double>::infinity();
-        std::optional<gameController::Action*> minMaxAction;
+        std::optional<const gameController::Action*> minMaxAction;
         bool maxSearch = gameLogic::conversions::idToSide(actionState.id) == mySide;
         if(maxSearch){
             minMaxVal *= -1;
@@ -188,7 +194,7 @@ namespace aiTools{
 
                 auto playerOnSnitch = currentEnv->getPlayer(currentEnv->snitch->position);
                 if(abort || maxDepth == 0 || (playerOnSnitch.has_value() && INSTANCE_OF(*playerOnSnitch, gameModel::Seeker))){
-                    return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
+                    return std::make_pair(makeRawShared(action), evalFun(newState));
                 }
 
                 double currentOutcomeExpectedValue = 0;
@@ -196,13 +202,13 @@ namespace aiTools{
                 for(const auto &nextActor : nextActors){
                     auto tmp = alphaBetaSearch(nextActor.first, nextActor.second, mySide, alpha, beta, maxDepth - 1, evalFun, abort, expansions);
                     if(!tmp.has_value()){
-                        return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
+                        return std::make_pair(makeRawShared(action), evalFun(newState));
                     }
 
                     currentOutcomeExpectedValue += tmp->second;
                     //Bedingung kann hier zutreffen, da abort von außen verändert werden kann
                     if(abort){
-                        return std::make_pair(std::make_shared<gameController::Action>(*action), evalFun(newState));
+                        return std::make_pair(makeRawShared(action), evalFun(newState));
                     }
                 }
 
@@ -227,7 +233,7 @@ namespace aiTools{
                         return std::nullopt;
                     }
 
-                    return std::make_pair(std::make_shared<gameController::Action>(*minMaxAction.value()), minMaxVal);
+                    return std::make_pair(makeRawShared(minMaxAction.value()), minMaxVal);
                 }
 
                 alpha = std::max(alpha, expectedValue);
@@ -244,7 +250,7 @@ namespace aiTools{
                         return std::nullopt;
                     }
 
-                    return std::make_pair(std::make_shared<gameController::Action>(*minMaxAction.value()), minMaxVal);
+                    return std::make_pair(makeRawShared(minMaxAction.value()), minMaxVal);
                 }
 
                 beta = std::min(beta, expectedValue);
@@ -256,7 +262,7 @@ namespace aiTools{
             return std::nullopt;
         }
 
-        return std::make_pair(std::make_shared<gameController::Action>(*minMaxAction.value()), minMaxVal);
+        return std::make_pair(makeRawShared(minMaxAction.value()), minMaxVal);
     }
 
     /**
