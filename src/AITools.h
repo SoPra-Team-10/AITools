@@ -135,10 +135,6 @@ namespace aiTools{
         auto currentPlayer = state.env->getPlayerById(actionState.id);
         if(actionState.turnState == ActionState::TurnState::Action){
             auto actionType = gameController::getPossibleBallActionType(currentPlayer, state.env);
-            if(!actionType.has_value()){
-                std::cerr << "-------No action possible-------" << std::endl;
-                return std::nullopt;
-            }
 
             if(*actionType == gameController::ActionType::Throw){
                 possibleShots = gameController::getAllPossibleShots(currentPlayer, state.env, 0);
