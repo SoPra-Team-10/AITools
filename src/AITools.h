@@ -237,35 +237,36 @@ namespace aiTools{
      * @param actionState current action state defining id and type of action to take
      * @param abort atomic bool flag to abort computation
      * @param minDepth minimal search depth
-     * @return DeltaRequest containing the desired action, the search depth on which the result was aquired, total number of states explored
+     * @param maxDepth maximal search depth
+     * @return DeltaRequest containing the desired action, the search depth on which the result was obtained, total number of states explored, expectede score of the future state
      */
     template <typename EvalFun>
-    auto computeBestActionAlphaBetaID(const State &state, const EvalFun &evalFun, const ActionState &actionState, const std::atomic_bool &abort, int minDepth) ->
-        std::tuple<communication::messages::request::DeltaRequest, int, unsigned long> {
+    auto computeBestActionAlphaBetaID(const State &state, const EvalFun &evalFun, const ActionState &actionState, const std::atomic_bool &abort, int minDepth, int maxDepth) ->
+        std::tuple<communication::messages::request::DeltaRequest, int, unsigned long, double> {
         using namespace communication::messages;
-        int maxDepth = minDepth;
+        int depth = minDepth;
         std::optional<request::DeltaRequest> bestAction;
         double bestScore = -std::numeric_limits<double>::infinity();
         unsigned long totalExpansions = 0;
         while (!abort){
-            auto [action, score, expansions] = computeBestActionAlphaBeta(state, evalFun, actionState, maxDepth++, abort);
+            auto [action, score, expansions] = computeBestActionAlphaBeta(state, evalFun, actionState, depth++, abort);
             if(!abort || score > bestScore){
                 bestAction.emplace(action);
                 bestScore = score;
             }
 
             totalExpansions += expansions;
-            if(maxDepth > 42){ //3 Aktionen pro Spieler, 14 Spieler (nur zufällig 42)
+            if(depth > maxDepth){
                 break;
             }
         }
 
         if(bestAction.has_value()){
-            return {*bestAction, maxDepth, totalExpansions};
+            return {*bestAction, depth, totalExpansions, bestScore};
         }
 
         return {request::DeltaRequest{types::DeltaType::SKIP, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, actionState.id,
-                                     std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, maxDepth, totalExpansions};
+                                     std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt, std::nullopt}, depth, totalExpansions, bestScore};
     }
 
     /**
