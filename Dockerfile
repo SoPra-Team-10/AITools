@@ -24,6 +24,12 @@ RUN git clone https://github.com/SoPra-Team-10/GameLogic.git
 WORKDIR /GameLogic
 RUN cmake . && make -j$(nproc) SopraGameLogic && make install
 
+# Compile Util
+WORKDIR /
+RUN git clone https://github.com/SoPra-Team-10/Util.git
+WORKDIR /Util
+RUN cmake . && make -j$(nproc) SopraUtil && make install
+
 RUN ldconfig
 
 WORKDIR /
